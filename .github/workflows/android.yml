@@ -20,58 +20,55 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Capacitor add + sync
+      - name: Capacitor - add android + sync
         run: |
           npm install
           npx cap add android
           npx cap sync android
 
-      - name: Stamp version
-        run: |
-          set -e
-          VER=$(node -p "require('./package.json').version")
-          RUN=${{ github.run_number }}
-          VCODE=$((40000 + RUN))
-          SHA=$(git rev-parse --short HEAD)
-          TAG="v${VER}-b${RUN}-${SHA}"
-          echo "WA_TAG=${TAG}" >> $GITHUB_ENV
-          echo "window.WA_BUILD={v:'${VER}',run:${RUN},code:${VCODE}}" > www/version.js || true
-          npx cap sync android
-          G=android/app/build.gradle
-          sed -i -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${VCODE}/" $G
-          sed -i -E "s/versionName[[:space:]]+\"[^\"]*\"/versionName \"${VER}\"/" $G
-          if ! grep -q "versionCode ${VCODE}" $G; then
-            sed -i "/defaultConfig {/a\        versionCode ${VCODE}\n        versionName \"${VER}\"" $G
-          fi
-          echo "Building ${TAG}"
-
-      - name: Native plugins + deps
+      - name: Native plugins
         run: |
           set -e
           JAVA=android/app/src/main/java/com/wayanime/app
           mkdir -p $JAVA
-          for f in native/*.java; do [ -f "$f" ] && cp "$f" $JAVA/; done
+          for f in ImmersivePlugin.java MainActivity.java NotifyPlugin.java EpisodeWorker.java; do
+            [ -f native/$f ] && cp native/$f $JAVA/
+          done
           ls -la $JAVA/
+
+      - name: Notifications (WorkManager + Jsoup + permission)
+        run: |
+          set -e
           mkdir -p android/app/src/main/res/drawable
           if ls native/ic_*.xml 1>/dev/null 2>&1; then cp native/ic_*.xml android/app/src/main/res/drawable/; fi
-
           G=android/app/build.gradle
-          # WorkManager + Jsoup (خاصين لـ EpisodeWorker / NotifyPlugin)
-          if [ -f native/EpisodeWorker.java ] || [ -f "$JAVA/EpisodeWorker.java" ]; then
-            grep -q 'androidx.work:work-runtime' $G || sed -i '/^dependencies {/a\    implementation "androidx.work:work-runtime:2.9.1"' $G
-            grep -q 'org.jsoup:jsoup' $G || sed -i '/^dependencies {/a\    implementation "org.jsoup:jsoup:1.17.2"' $G
-            echo "Added WorkManager + Jsoup"
-            grep -n 'work-runtime\|jsoup' $G || true
-          fi
-
+          grep -q "androidx.work:work-runtime" $G || sed -i '/^dependencies {/a\    implementation "androidx.work:work-runtime:2.9.1"' $G
+          grep -q "org.jsoup:jsoup" $G || sed -i '/^dependencies {/a\    implementation "org.jsoup:jsoup:1.17.2"' $G
           M=android/app/src/main/AndroidManifest.xml
-          grep -q POST_NOTIFICATIONS $M || sed -i 's#<application#<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application#' $M || true
+          grep -q POST_NOTIFICATIONS $M || sed -i 's#<application#<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application#' $M
           grep -q usesCleartextTraffic $M || sed -i 's#<application#<application android:usesCleartextTraffic="true"#' $M || true
+          grep -n "work-runtime\|jsoup" $G || true
+
+      - name: Splash image
+        run: |
+          set -e
+          sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick || true
+          IM=$(command -v magick || echo convert)
+          RES=android/app/src/main/res
+          SRC=""
+          for c in assets/splash.jpg www/assets/splash.jpg; do [ -f "$c" ] && SRC="$c" && break; done
+          [ -z "$SRC" ] && echo "no splash" && exit 0
+          for f in $(find $RES -name 'splash.png' 2>/dev/null); do
+            case "$f" in
+              *land*) $IM "$SRC" -resize 1280x720^ -gravity center -extent 1280x720 "$f" ;;
+              *)      $IM "$SRC" -resize 720x1280^ -gravity center -extent 720x1280 "$f" ;;
+            esac
+          done
 
       - name: App icon
         run: |
           set -e
-          sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+          sudo apt-get install -y -qq imagemagick || true
           IM=$(command -v magick || echo convert)
           RES=android/app/src/main/res
           ICON=""
@@ -86,19 +83,14 @@ jobs:
             $IM "$ICON" -resize ${s}x${s} $RES/mipmap-$n/ic_launcher_foreground.png 2>/dev/null || true
           done
 
-      - name: Build APK
+      - name: Build debug APK
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload
-        run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk "WayAnime-${WA_TAG}.apk"
-          ls -lh WayAnime-*.apk
-
       - uses: actions/upload-artifact@v4
         with:
-          name: WayAnime-${{ env.WA_TAG }}
-          path: WayAnime-${{ env.WA_TAG }}.apk
+          name: WayAnime-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
