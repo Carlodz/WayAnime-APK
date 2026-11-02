@@ -16,6 +16,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+/** ملء الشاشة الحقيقي: كيدور الهاتف أفقياً + كيخبّي شريط الحالة وأزرار التنقل (Immersive) + كيغطي الـ notch. */
 @CapacitorPlugin(name = "Immersive")
 public class ImmersivePlugin extends Plugin {
 
