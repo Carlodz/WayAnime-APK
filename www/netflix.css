@@ -1,0 +1,93 @@
+/* WayAnime — netflix.css : ستايل Netflix (أسود + أحمر #E50914 + شريط سفلي + بطاقات بوستر) — يتحمّل آخر واحد */
+:root{--bg:#000;--panel:#141414;--panel2:#1f1f1f;--line:#2b2b2b;--a1:#e50914;--a2:#f40612;--mute:#8c8c8c;--nf:#e50914}
+html,body{background:#000}
+body{font-family:"Noto Sans","Noto Kufi Arabic",system-ui,sans-serif}
+
+/* ===== الهيدر: شفاف فوق الهيرو + شعار WAYANIME أحمر ===== */
+header,.wrap.hh header,.wrap.hh header.solid,header.solid{
+  background:linear-gradient(#000000e6,#00000000)!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.wrap:not(.hh) header,header.solid{background:#000000f2!important}
+header .brand span{display:none!important}
+header .brand .logo{display:block!important;width:40px;height:40px;object-fit:contain;filter:drop-shadow(0 2px 10px #000)}
+/* مستطيل البحث: مستطيل واحد (.ub) والـ .sb داخلو بلا حدود مضاعفة */
+.ub{flex:1 1 auto;min-width:0;height:42px;background:#000000a6;border:1px solid #ffffff59;border-radius:4px;overflow:hidden}
+.ub:focus-within{border-color:#fff}
+.ub .sb{flex:1 1 auto!important;width:auto!important;min-width:0;height:100%;padding:0 12px!important;gap:10px;border:0!important;border-radius:0!important;background:none!important;-webkit-backdrop-filter:none;backdrop-filter:none}
+.ub .sb input{font-size:14px;color:#fff}
+.ub .sb input::placeholder{color:#b3b3b3}
+.ub .sb button{color:#fff}
+#cbBtn{border-radius:4px}
+
+/* ===== الهيرو ===== */
+.hhero::after{background:linear-gradient(0deg,#000 0,#000000d9 14%,#00000000 48%),linear-gradient(180deg,#000000b3 0,#00000000 26%)!important}
+.hbody h2{font-weight:900;letter-spacing:.5px;text-shadow:0 4px 24px #000}
+.hbody .sub{color:#d2d2d2}
+.hbtn{background:#fff!important;color:#000!important;border-radius:4px!important;font-weight:800;box-shadow:none!important}
+.hbtn svg{fill:#000}
+.hdots button{height:3px!important;border-radius:0!important;background:#ffffff40}
+.hdots button i{background:var(--nf)!important}
+
+/* ===== الصفوف والبطاقات ===== */
+.sec h3,.ph h3{font-size:18px;font-weight:700;color:#e5e5e5}
+.grid{gap:14px 8px!important}
+.card img{aspect-ratio:2/3;width:100%;object-fit:cover;border-radius:4px!important;background:#141414;box-shadow:none!important}
+.card:hover{transform:scale(1.06)}
+.card p{color:#d2d2d2;font-weight:500;font-size:12px}
+.card .badge{background:var(--nf)!important;border-radius:2px!important;font-weight:800;letter-spacing:.3px}
+.rt{color:#46d369}
+.rt:not(:empty)::before{content:"";}
+
+/* ===== الفلاتر (Pills ديال Netflix) ===== */
+.chip,select,.ddb{border-radius:999px!important;background:transparent!important;border:1px solid #ffffff59!important;color:#fff;font-weight:600}
+.chip.on,.dd.has .ddb{background:#fff!important;color:#000!important;border-color:#fff!important}
+
+/* ===== أزرار ===== */
+.primary,#watch{background:var(--nf)!important;color:#fff;border-radius:4px;box-shadow:none}
+#watch{background:#fff!important;color:#000}
+.eps button.on,.tabs button.on::after{background:var(--nf)}
+.toast{background:#262626;border-left:3px solid var(--nf);border-radius:4px}
+
+/* ===== الشريط السفلي (موبايل) ===== */
+#nfNav{display:none}
+@media(max-width:820px){
+  main{padding-bottom:calc(66px + env(safe-area-inset-bottom,0px))!important}
+  #nfNav{display:flex;position:fixed;z-index:70;inset-inline:0;bottom:0;height:calc(58px + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px);background:#000000f5;border-top:1px solid #ffffff14;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+  #nfNav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:0;border-radius:0;padding:6px 0;color:#8c8c8c;font-size:10.5px;font-weight:600}
+  #nfNav button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  #nfNav button.on{color:#fff}
+  #nfNav button.on svg{fill:#fff}
+  body:has(#pl) #nfNav,body.dr-open #nfNav{display:none}
+  .toast{bottom:78px}
+}
+
+/* حركة دخول خفيفة */
+@keyframes nfIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+main>*{animation:nfIn .28s ease both}
+
+/* لوغو WayAnime فركن كل بوستر (تحت، جنب البادج) */
+.card{container-type:inline-size}
+.card::after{content:"";position:absolute;z-index:2;pointer-events:none;top:calc(150cqw - 36px);inset-inline-start:6px;width:28px;height:28px;background:url(assets/icon.png) center/contain no-repeat;filter:drop-shadow(0 1px 5px #000)}
+
+/* ===== السايد بار (لوغو WayAnime) بستايل Netflix ===== */
+#dr{background:#000;border-inline-start:1px solid #ffffff14;width:min(82vw,320px)}
+#dr .drp{min-height:200px;background-color:#1a0507;background-image:linear-gradient(135deg,#7a0a10,#1a0507)}
+#dr .drpi img,#dr .drpi i{border-radius:6px;width:60px;height:60px;background-color:#e50914}
+#dr .drpi span{color:#46d369}
+#dr nav{padding:12px 0 0}
+#dr nav button{border-radius:0;padding:16px 20px;font-size:16px;color:#b3b3b3;border-inline-start:3px solid transparent}
+#dr nav button.on{background:#ffffff0f;color:#fff;border-inline-start-color:#e50914}
+#dr nav button svg{width:24px;height:24px}
+#dr nav button:active{background:#ffffff14}
+
+/* الهيدر ما يبقاش تحت شريط الحالة (Android edge-to-edge) + منطقة الضغط ديال اللوغو أكبر */
+header{padding-top:env(safe-area-inset-top,0px)!important;height:calc(56px + env(safe-area-inset-top,0px))!important}
+header .brand{padding:6px 8px;margin:-6px -8px;position:relative;z-index:2;cursor:pointer}
+
+/* ===== أيقونات SVG موحّدة (بدل الإيموجي والرموز) ===== */
+.rt:not(:empty)::before{content:"";display:inline-block;width:11px;height:11px;margin-inline-end:4px;vertical-align:-1px;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12 3 14.7 8.6 20.8 9.5 16.4 13.8 17.5 19.9 12 17 6.5 19.9 7.6 13.8 3.2 9.5 9.3 8.6'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12 3 14.7 8.6 20.8 9.5 16.4 13.8 17.5 19.9 12 17 6.5 19.9 7.6 13.8 3.2 9.5 9.3 8.6'/%3E%3C/svg%3E") center/contain no-repeat}
+.sc svg.i,.streams button svg.i,.smenu button svg.i{width:14px;height:14px;vertical-align:-2px;margin-inline-end:2px}
+.sc svg.i{fill:currentColor;stroke:none}
+#dr .drpi span svg.st,#cb .cbpi span svg.st{width:12px;height:12px;fill:currentColor;stroke:none;margin-inline-end:4px;vertical-align:-1px}
+.smfoot{display:none}

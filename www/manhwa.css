@@ -1,0 +1,115 @@
+/* WayAnime — manhwa.css : ستايل مرجع «Manhwa reader» (بنفسجي غامق، بطاقات بعنوان فوق البوستر، صفحة تفاصيل بوستر كامل، شريط مشغّل pill)
+   يتحمّل آخر واحد (بعد purple.css) */
+:root{
+  --bg:#0b0820;--panel:#151134;--panel2:#1d1745;--line:#2a2260;--mute:#8f89b3;
+  --a1:#7b4dff;--a2:#a78bfa;--gold:#ffc247;--text:#f3f0ff;
+  --f:"Outfit","Noto Kufi Arabic","Noto Sans",system-ui,sans-serif;
+  --r-card:16px;--r-pill:999px;
+}
+html,body,.wrap,main{background:var(--bg)!important}
+body,button,input,select,textarea{font-family:var(--f)}
+.hbody h2,.hero h2,.brand,.card p,.tabs button,h3{font-family:var(--f)}
+
+/* ===== الهيرو: عنوان فـ الوسط + حبوب (genres) + نقاط ===== */
+.hhero::after{background:linear-gradient(0deg,var(--bg) 0,#0b0820cc 20%,#0b082000 55%),linear-gradient(180deg,#0b0820b3 0,#0b082000 30%)!important}
+.hbody{text-align:center!important;display:flex;flex-direction:column;align-items:center}
+.hbody h2{font-size:30px!important;font-weight:800!important;letter-spacing:.2px;text-shadow:none!important;filter:drop-shadow(0 3px 10px #000a)}
+.hbody .sub{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:2px 0 10px!important}
+.pill{display:inline-flex;align-items:center;height:24px;padding:0 12px;border-radius:var(--r-pill);background:var(--a1);color:#fff;font-size:11.5px;font-weight:600;line-height:1;box-shadow:0 4px 14px #7b4dff55}
+.hdesc{display:none!important}
+.hmeta2{justify-content:center;margin-bottom:10px!important}
+.hbtn{height:36px!important;padding:0 18px!important;font-size:13px!important;background:#ffffff1f!important;color:#fff!important;border:1px solid #ffffff40!important;box-shadow:none!important;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.hdots{bottom:34px!important}
+.hdots button{width:8px!important;height:8px!important;background:#ffffff40!important}
+.hdots button.on{width:22px!important}
+
+/* ===== عناوين الأقسام + صف «تابع المشاهدة» ===== */
+.mh{display:flex;align-items:center;justify-content:space-between;margin:6px 0 12px}
+.mh h3{margin:0;font-size:18px;font-weight:700;color:#fff}
+.mrow{margin:0 0 22px}
+.mscroll{display:flex;gap:12px;overflow-x:auto;margin-inline:calc(var(--gut,14px) * -1);padding:2px var(--gut,14px) 6px;scroll-snap-type:x proximity;scroll-padding-inline:var(--gut,14px);scrollbar-width:none}
+.mscroll::-webkit-scrollbar{display:none}
+.cw{position:relative;flex:0 0 min(68vw,260px);height:124px;border-radius:var(--r-card);overflow:hidden;background:var(--panel);scroll-snap-align:start;cursor:pointer;border:1px solid #7b4dff33}
+.cw img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 20%;filter:saturate(1.1)}
+.cw::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,#0b0820f5 0,#0b0820a6 42%,#0b082026 100%)}
+.cwt{position:absolute;z-index:1;inset-inline:12px;bottom:10px;display:flex;flex-direction:column;gap:3px}
+.cwt b{font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cwt small{font-size:11.5px;color:var(--a2);font-weight:500}
+.cw .cwp{position:absolute;z-index:1;top:10px;inset-inline-end:10px;width:30px;height:30px;border-radius:50%;background:var(--a1);display:grid;place-items:center;box-shadow:0 4px 14px #7b4dff88}
+.cw .cwp svg{width:14px;height:14px;fill:#fff;stroke:none}
+
+/* ===== شريط الفلاتر = حبوب أفقية ===== */
+.fbar{flex-wrap:nowrap!important;overflow-x:auto;gap:8px!important;margin-bottom:16px!important;scrollbar-width:none}
+.fbar::-webkit-scrollbar{display:none}
+.fbar .chips{flex-wrap:nowrap}
+.chip{white-space:nowrap;height:34px;padding:0 16px!important;font-weight:600}
+#acount{display:none}
+
+/* ===== البطاقات: العنوان فوق البوستر ===== */
+.grid{gap:12px 10px!important}
+.card{position:relative;aspect-ratio:2/3;border-radius:var(--r-card);overflow:hidden;background:var(--panel)}
+.card img{position:absolute!important;inset:0;width:100%!important;height:100%!important;aspect-ratio:auto!important;border-radius:0!important;object-fit:cover;outline:0!important}
+.card:hover img{outline:0!important}
+.card p{position:absolute!important;inset-inline:0;bottom:0;margin:0!important;height:auto!important;padding:30px 8px 10px;text-align:center;font-size:12px!important;font-weight:700;line-height:1.3!important;color:#fff!important;background:linear-gradient(0deg,#0b0820f7 0,#0b0820bf 55%,#0b082000 100%);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .cm:first-of-type{display:none!important}
+.card .cm:last-child{position:absolute;z-index:2;top:6px;inset-inline-end:6px;inset-inline-start:auto;display:flex!important;flex-direction:row-reverse;align-items:center;gap:4px;min-height:0!important;margin:0!important}
+.card.ecard .cm{display:none!important}
+.card .rt{display:inline-flex;align-items:center;gap:3px;height:22px;padding:0 8px;border-radius:var(--r-pill);background:#0b0820b8;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:var(--gold);font-size:11px;font-weight:700}
+.card .rt:empty{display:none}
+.card .rt:not(:empty)::before{content:"";display:inline-block;width:1em;height:1em;margin-inline-end:3px;vertical-align:-.12em;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12 3 14.7 8.6 20.8 9.5 16.4 13.8 17.5 19.9 12 17 6.5 19.9 7.6 13.8 3.2 9.5 9.3 8.6'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12 3 14.7 8.6 20.8 9.5 16.4 13.8 17.5 19.9 12 17 6.5 19.9 7.6 13.8 3.2 9.5 9.3 8.6'/%3E%3C/svg%3E") center/contain no-repeat;font-size:10px}
+.card .star{display:grid!important;place-items:center;width:26px!important;height:26px!important;border-radius:50%!important;background:#0b0820b8!important;border:0!important;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:#fff}
+.card .star svg.i{width:14px;height:14px}
+.card::after{display:none!important}
+.card .badge{top:auto!important;bottom:46px!important;inset-inline-start:6px!important;inset-inline-end:auto!important;height:22px;display:inline-flex;align-items:center;padding:0 10px!important;font-size:10.5px!important;background:linear-gradient(135deg,#7b4dff,#a78bfa)!important;border-radius:var(--r-pill)!important}
+.card .epb{top:6px!important;bottom:auto!important;inset-inline-start:6px!important;inset-inline-end:auto!important;background:var(--a1)!important}
+
+/* ===== صفحة تفاصيل الأنمي: بوستر كامل ===== */
+.hero:has(>.dp),.hero{background-size:cover!important;background-position:center top!important}
+.hero:has(>.dp){min-height:min(600px,76vh)!important;height:auto!important;justify-content:flex-end;align-items:center!important;text-align:center;padding:calc(var(--hh,56px) + 10px) var(--gut,14px) 18px!important}
+.hero:has(>.dp) .dp{display:none!important}
+.hero:has(>.dp)::before{display:none!important}
+.hero:has(>.dp)>div{display:flex;flex-direction:column;align-items:center}
+.hero:has(>.dp)>div>h2{order:0}.hero:has(>.dp)>div>.sub{order:1}.hero:has(>.dp)>div>.hmeta{order:2}.hero:has(>.dp)>div>.acts{order:3;width:100%}.hero:has(>.dp)>div>.chars{order:4;align-self:stretch}
+.hero::after{background:linear-gradient(180deg,#0b082099 0,#0b082000 26%,#0b082066 52%,var(--bg) 96%)!important}
+.hero>div{z-index:1}
+.hero:has(>.dp) h2{font-size:28px!important;font-weight:800;text-shadow:none!important;filter:drop-shadow(0 3px 10px #000a)}
+.hero:has(>.dp) .sub{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;color:#cfc9ee;font-size:12.5px}
+.hero .hmeta{justify-content:center;border-top:0!important;padding-top:0!important;gap:8px}
+.hero .hmeta b{color:var(--gold);font-weight:700}
+.hero .hmeta span:not(.stars):not(.ys){padding:2px 10px;border-radius:var(--r-pill);background:#ffffff18;font-size:12px}
+.hero:has(>.dp) .acts{justify-content:center;gap:10px!important;margin:14px 0 6px}
+.hero:has(>.dp) .acts .ghost{flex:0 0 auto!important;height:46px;padding:0 20px;border-radius:var(--r-pill)!important;background:#7b4dff1f!important;border:1px solid #7b4dff66!important;color:#fff;font-weight:600;font-size:14px}
+.hero:has(>.dp) .acts #watch{flex:1 1 auto!important;max-width:240px;background:var(--a1)!important;border-color:transparent!important;box-shadow:0 10px 26px #7b4dff77}
+.hero:has(>.dp) .acts #watch svg.i{fill:#fff}
+.hero .chars{justify-content:flex-start}
+
+/* ===== التبويبات + الحلقات ===== */
+.tabs{gap:8px!important;padding:6px 0 16px!important;border:0!important}
+.tabs button{height:38px;padding:0 20px!important;border-radius:var(--r-pill)!important;background:var(--panel)!important;color:var(--mute)!important;font-weight:600;font-size:14px!important}
+.tabs button.on{background:var(--a1)!important;color:#fff!important;box-shadow:0 8px 22px #7b4dff55}
+.tabs button::after,.tabs button.on::after{display:none!important}
+.eps{gap:8px!important}
+.eps button{min-height:44px;border-radius:14px!important;background:var(--panel)!important;border:1px solid var(--line)!important;font-weight:600}
+.eps button.on{background:var(--a1)!important;border-color:transparent!important;color:#fff}
+.eps button.seen{opacity:.5}
+.mute{color:#aaa4cc}
+
+/* ===== المشغّل: شريط pill بحدّ بنفسجي ===== */
+#pl .pbot,#pl.wa-fs .pbot{inset-inline:calc(12px + env(safe-area-inset-left,0px)) calc(12px + env(safe-area-inset-right,0px))!important;bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;padding:8px 16px!important;border-radius:var(--r-pill);background:#120e2bd9!important;border:1.5px solid var(--a1);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+#pl .ptop{background:linear-gradient(#0b0820d9,transparent)}
+#ps::-webkit-slider-thumb{border-color:var(--a1);background:#fff}
+
+/* ===== الشريط السفلي ===== */
+@media(max-width:820px){
+  #nfNav{background:#110c2bf5;border:1px solid #7b4dff40;border-radius:28px;box-shadow:0 12px 34px #000b}
+  #nfNav button.on{color:#fff}
+  #nfNav button.on svg{stroke:var(--a2);fill:#a78bfa33}
+  #nfNav button[data-k=search]{box-shadow:0 0 0 5px var(--bg),0 10px 28px #7b4dffaa}
+}
+@media(prefers-reduced-motion:reduce){.hslide,.hbody,.hdots button i{transition:none!important;animation:none!important}}
+
+/* ===== الهيدر: لوغو فـ الوسط بلا مستطيل بحث (البحث فـ الشريط السفلي) ===== */
+header,.wrap.hh header,.wrap.hh header.solid,header.solid{justify-content:center!important}
+header .ub{display:none!important}
+header .brand{margin:0 auto}
+header .brand .logo{width:44px!important;height:44px!important}
