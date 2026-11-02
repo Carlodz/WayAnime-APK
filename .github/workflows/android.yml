@@ -26,7 +26,7 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Stamp version 4.0
+      - name: Stamp version
         run: |
           set -e
           VER=$(node -p "require('./package.json').version")
@@ -45,7 +45,7 @@ jobs:
           fi
           echo "Building ${TAG}"
 
-      - name: Native plugins
+      - name: Native plugins + deps
         run: |
           set -e
           JAVA=android/app/src/main/java/com/wayanime/app
@@ -55,6 +55,19 @@ jobs:
           mkdir -p android/app/src/main/res/drawable
           if ls native/ic_*.xml 1>/dev/null 2>&1; then cp native/ic_*.xml android/app/src/main/res/drawable/; fi
 
+          G=android/app/build.gradle
+          # WorkManager + Jsoup (خاصين لـ EpisodeWorker / NotifyPlugin)
+          if [ -f native/EpisodeWorker.java ] || [ -f "$JAVA/EpisodeWorker.java" ]; then
+            grep -q 'androidx.work:work-runtime' $G || sed -i '/^dependencies {/a\    implementation "androidx.work:work-runtime:2.9.1"' $G
+            grep -q 'org.jsoup:jsoup' $G || sed -i '/^dependencies {/a\    implementation "org.jsoup:jsoup:1.17.2"' $G
+            echo "Added WorkManager + Jsoup"
+            grep -n 'work-runtime\|jsoup' $G || true
+          fi
+
+          M=android/app/src/main/AndroidManifest.xml
+          grep -q POST_NOTIFICATIONS $M || sed -i 's#<application#<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application#' $M || true
+          grep -q usesCleartextTraffic $M || sed -i 's#<application#<application android:usesCleartextTraffic="true"#' $M || true
+
       - name: App icon
         run: |
           set -e
@@ -62,7 +75,9 @@ jobs:
           IM=$(command -v magick || echo convert)
           RES=android/app/src/main/res
           ICON=""
-          for c in assets/app-icon.png www/assets/icon.png assets/icon.png; do [ -f "$c" ] && ICON="$c" && break; done
+          for c in assets/app-icon.png www/assets/app-icon.png www/assets/icon.png assets/icon.png; do
+            [ -f "$c" ] && ICON="$c" && break
+          done
           [ -z "$ICON" ] && echo "no icon" && exit 0
           for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
             IFS=: read n s <<< "$d"
