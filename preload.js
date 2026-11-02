@@ -1,0 +1,36 @@
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
+contextBridge.exposeInMainWorld('api', {
+  get: (url) => ipcRenderer.invoke('addon:get', url),
+  text: (url) => ipcRenderer.invoke('addon:text', url),
+  translate: (t) => ipcRenderer.invoke('translate', t),
+  anilist: (title) => ipcRenderer.invoke('anilist:info', title),
+  bg: (o) => ipcRenderer.invoke('bg:set', o),
+  onHidden: (cb) => ipcRenderer.on('app:hidden', () => cb()),
+  notify: (o) => ipcRenderer.invoke('notify:show', o),
+  onNotifyOpen: (cb) => ipcRenderer.on('notify:open', (_e, id) => cb(id)),
+  anilistDesc: (names) => ipcRenderer.invoke('anilist:desc', names),
+  schedule: (d) => ipcRenderer.invoke('anilist:schedule', d),
+  anilistChars: (id) => ipcRenderer.invoke('anilist:chars', id),
+  torrent: (opts) => ipcRenderer.invoke('torrent:start', opts),
+  transcode: (url) => ipcRenderer.invoke('transcode:start', url),
+  media: { probe: (u) => ipcRenderer.invoke('media:probe', u), start: (o) => ipcRenderer.invoke('media:start', o), stop: () => ipcRenderer.invoke('media:stop'), subs: (o) => ipcRenderer.invoke('media:subs', o), open: () => ipcRenderer.invoke('media:open'), serve: (p) => ipcRenderer.invoke('media:serve', p), subFile: (p) => ipcRenderer.invoke('media:subfile', p) },
+  pathOf: (f) => { try { return webUtils.getPathForFile(f); } catch { return f && f.path || ''; } },
+  acct: { me: () => ipcRenderer.invoke('acct:me'), login: (o) => ipcRenderer.invoke('acct:login', o), logout: () => ipcRenderer.invoke('acct:logout'), site: () => ipcRenderer.invoke('acct:site') },
+  sync: { get: () => ipcRenderer.invoke('sync:get'), put: (b) => ipcRenderer.invoke('sync:put', b) },
+  win: { min: () => ipcRenderer.invoke('win:min'), max: () => ipcRenderer.invoke('win:max'), close: () => ipcRenderer.invoke('win:close') },
+  ar: {
+    list: (o) => ipcRenderer.invoke('ar:list', o),
+    search: (q) => ipcRenderer.invoke('ar:search', q),
+    episodes: (id) => ipcRenderer.invoke('ar:episodes', id),
+    streams: (ep) => ipcRenderer.invoke('ar:streams', ep),
+    direct: (u) => ipcRenderer.invoke('ar:direct', u)
+  },
+  dub: { latest: () => ipcRenderer.invoke('dub:latest'), list: () => ipcRenderer.invoke('dub:list'), search: (q) => ipcRenderer.invoke('dub:search', q), detail: (id) => ipcRenderer.invoke('dub:detail', id), episodes: (id) => ipcRenderer.invoke('dub:episodes', id), streams: (o) => ipcRenderer.invoke('dub:streams', o) },
+  custom: { list: () => ipcRenderer.invoke('custom:list'), open: () => ipcRenderer.invoke('custom:open') },
+  resolveHost: (u) => ipcRenderer.invoke('host:resolve', u),
+  html: (url) => ipcRenderer.invoke('web:html', url),
+  htmlBrowser: (url) => ipcRenderer.invoke('web:browserHtml', url),
+  update: { onState: (cb) => ipcRenderer.on('update:state', (_e, s) => cb(s)), state: () => ipcRenderer.invoke('update:state'), install: () => ipcRenderer.invoke('update:install') },
+  logos: () => ipcRenderer.invoke('logos:list'),
+  openExternal: (url) => ipcRenderer.invoke('open:external', url)
+});
