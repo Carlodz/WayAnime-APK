@@ -113,3 +113,28 @@ header,.wrap.hh header,.wrap.hh header.solid,header.solid{justify-content:center
 header .ub{display:none!important}
 header .brand{margin:0 auto}
 header .brand .logo{width:44px!important;height:44px!important}
+
+/* ===== هيرو الرئيسية: بوستر الأنمي كخلفية، يتبدل مع كل شريحة ===== */
+.hhero .hvid{display:none!important}
+.hhero .hbg{display:block!important;position:absolute!important;inset:0!important;filter:none!important;transform:scale(1.02);background-size:cover!important;background-position:center 15%!important;background-repeat:no-repeat!important}
+.hhero .hslide.on .hbg{animation:hz 12s ease-in-out infinite alternate!important}
+@keyframes hz{from{transform:scale(1.02)}to{transform:scale(1.12)}}
+.hhero .hslide::after{display:block!important;content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,#0b082099 0,#0b082000 24%,#0b082000 38%,#0b0820d9 74%,var(--bg) 100%)}
+.hhero::after{display:none!important}
+.hhero .hbody,.hhero .hdots{z-index:3}
+
+/* ===== آخر الحلقات: شارة «جديد» + بوستر بديل ===== */
+.ecard .epnew{top:auto!important;bottom:58px!important;background:linear-gradient(135deg,#ff4d6d,#ff8a3d)!important;color:#fff!important;font-weight:800;box-shadow:0 4px 14px #ff4d6d77}
+.ecard img.noimg{opacity:0}
+.ecard:has(img.noimg){background:linear-gradient(160deg,#2a1d63,#0b0820)}
+.ecard img.epimg{background:linear-gradient(110deg,#1a1440 30%,#2a1f5c 50%,#1a1440 70%);background-size:200% 100%;animation:epsh 1.4s linear infinite}
+@keyframes epsh{to{background-position:-200% 0}}
+
+/* ===== أخف وأسرع: لا نرسم البطاقات خارج الشاشة ===== */
+#agrid .card{content-visibility:auto;contain-intrinsic-size:auto 230px}
+.hhero,.hslide{contain:layout paint}
+@media(prefers-reduced-motion:reduce){.hhero .hslide.on .hbg{animation:none!important}}
+
+/* بوستر مكسّر نهائيًا: بطاقة بديلة بدل المربع الفارغ */
+.card img.noimg,.smrow img.noimg,.rc img.noimg{opacity:0}
+.card:has(img.noimg){background:linear-gradient(160deg,#2a1d63,#0b0820)}

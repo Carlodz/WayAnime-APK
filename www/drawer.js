@@ -41,11 +41,15 @@
         it('genre', ICON.tag, 'التصنيفات', false) +
         it('dl', DL, 'الحلقات المحملة', false) +
         it('wp', window.waWpIcon || '', 'مشاهدة مشتركة', false) +
+        it('nt', window.waBellIcon || '', 'الإشعارات' + (window.waUnread ? '<em class="nbadge">' + window.waUnread + '</em>' : ''), false) +
+        it('sh', window.waSrcIcon || '', 'حالة المصادر', false) +
       '</nav>';
     dr.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.k; close();
       if (k === 'genre') setTimeout(goGenre, 150);
       else if (k === 'dl') setTimeout(() => window.openDownloads && window.openDownloads(), 150);
+      else if (k === 'sh') setTimeout(() => window.openSources && window.openSources(), 150);
+      else if (k === 'nt') setTimeout(() => window.openNotifications && window.openNotifications(), 150);
       else if (k === 'wp') setTimeout(() => window.openWatchParty && window.openWatchParty(), 150);
       else if (k.indexOf('sec:') === 0) setTimeout(() => goSec(k.slice(4)), 150);
     }));

@@ -6,17 +6,32 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data:; media-src * blob:; frame-src * data:; child-src * blob:; connect-src *; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' https://cdn.jsdelivr.net">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preload" as="image" href="assets/splash.jpg">
+<link id="gfonts" href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print">
 <meta name="theme-color" content="#0b0820">
 <title>WayAnime</title>
 <link rel="icon" href="assets/icon.png">
 <style>
-@font-face{font-family:'Noto Sans';font-weight:400;font-style:normal;src:url('fonts/NotoSans-Regular.ttf') format('truetype')}
-@font-face{font-family:'Noto Sans';font-weight:500;font-style:normal;src:url('fonts/NotoSans-Medium.ttf') format('truetype')}
-@font-face{font-family:'Noto Sans';font-weight:600;font-style:normal;src:url('fonts/NotoSans-SemiBold.ttf') format('truetype')}
-@font-face{font-family:'Noto Sans';font-weight:700;font-style:normal;src:url('fonts/NotoSans-Bold.ttf') format('truetype')}
-@font-face{font-family:'Noto Sans';font-weight:800;font-style:normal;src:url('fonts/NotoSans-ExtraBold.ttf') format('truetype')}
-@font-face{font-family:'Noto Sans';font-weight:900;font-style:normal;src:url('fonts/NotoSans-Black.ttf') format('truetype')}
+#wasplash{position:fixed;inset:0;z-index:2147483000;background:#07060c url(assets/splash.jpg) center/cover no-repeat;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:0 24px calc(54px + env(safe-area-inset-bottom,0px));direction:rtl;transition:opacity .45s ease}
+#wasplash::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#07060c00 42%,#07060cc4 76%,#07060c 100%)}
+#wasplash>*{position:relative}
+#wasplash.out{opacity:0;pointer-events:none}
+#wasplash h1{margin:0;font:900 40px/1.1 "Outfit","Noto Sans",sans-serif;letter-spacing:1px;color:#fff;text-shadow:0 4px 22px #000,0 0 30px #7b4dff88}
+#wasplash .wacr{margin:6px 0 22px;font:700 15px/1.6 "Noto Kufi Arabic","Noto Sans",sans-serif;color:#d9cfff;text-shadow:0 2px 12px #000;text-align:center}
+#wasplash .wacr span{font-family:"Outfit","Noto Sans",sans-serif;font-weight:800;color:#fff}
+#wasplash b{font:800 19px/1.6 "Noto Kufi Arabic","Noto Sans",sans-serif;color:#fff;text-align:center;text-shadow:0 2px 14px #000}
+#wasplash small{display:block;margin-top:2px;font:600 13px/1.6 "Noto Kufi Arabic","Noto Sans",sans-serif;color:#cfc9ee;text-align:center;min-height:21px}
+#wasplash i{display:block;width:min(240px,64vw);height:4px;border-radius:4px;background:#ffffff26;overflow:hidden;margin-top:14px}
+#wasplash i::after{content:"";display:block;width:45%;height:100%;border-radius:4px;background:#7b4dff;animation:wasl 1.1s ease-in-out infinite}
+@keyframes wasl{from{transform:translateX(-120%)}to{transform:translateX(260%)}}
+</style>
+<style>
+@font-face{font-family:'Noto Sans';font-weight:400;font-style:normal;src:url('fonts/NotoSans-Regular.woff') format('woff')}
+@font-face{font-family:'Noto Sans';font-weight:500;font-style:normal;src:url('fonts/NotoSans-Medium.woff') format('woff')}
+@font-face{font-family:'Noto Sans';font-weight:600;font-style:normal;src:url('fonts/NotoSans-SemiBold.woff') format('woff')}
+@font-face{font-family:'Noto Sans';font-weight:700;font-style:normal;src:url('fonts/NotoSans-Bold.woff') format('woff')}
+@font-face{font-family:'Noto Sans';font-weight:800;font-style:normal;src:url('fonts/NotoSans-ExtraBold.woff') format('woff')}
+@font-face{font-family:'Noto Sans';font-weight:900;font-style:normal;src:url('fonts/NotoSans-Black.woff') format('woff')}
 :root{--bg:#1c1c21;--panel:#26262c;--panel2:#2f2f37;--line:#3a3a44;--text:#f4f3ff;--mute:#a09fb5;--a1:#6c5ce7;--grad:#6c5ce7}
 *{box-sizing:border-box}
 body{margin:0;height:100vh;background:var(--bg);color:var(--text);font-family:"Noto Sans","Noto Kufi Arabic","Segoe UI",Tahoma,sans-serif;overflow:hidden}
@@ -237,6 +252,7 @@ select:focus{border-color:var(--a1);outline:0}
 <link rel="stylesheet" href="episode-ui.css">
 </head>
 <body>
+<div id="wasplash" role="status" aria-live="polite"><h1 dir="ltr">WayAnime</h1><p class="wacr"><span dir="ltr">Carlodz</span> · ناشر رائد</p><b>انتظر حتى يتم تحميل البيانات…</b><small id="wasmsg">جارٍ التحميل…</small><i></i></div>
 <div class="wrap">
 <header>
   <div class="brand"><img class="logo" src="assets/icon.png" alt="WayAnime"><span>WayAnime</span></div>
@@ -256,8 +272,10 @@ select:focus{border-color:var(--a1);outline:0}
 </header>
 <main id="view"></main>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<script src="splash.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 <script src="android-api.js"></script>
+<script src="library.js"></script>
 <script src="renderer.js"></script>
 <script src="drawer.js"></script>
 <script src="episode-ui.js"></script>
@@ -268,6 +286,8 @@ select:focus{border-color:var(--a1);outline:0}
 <script src="manhwa.js"></script>
 <script src="categories.js"></script>
 <script src="downloads.js"></script>
+<script src="downloads-fix.js"></script>
+<script src="notifications.js"></script>
 <script src="watchparty.js"></script>
 </body>
 </html>

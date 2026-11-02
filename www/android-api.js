@@ -9,7 +9,7 @@ if (!window.crypto.randomUUID) window.crypto.randomUUID = () => 'xxxxxxxx-xxxx-4
 
 // fetch عبر HTTP الأصلي ديال Android (بلا CORS، وكيقبل Referer/Cookie/User-Agent)
 const __call = (p, m, o) => { const C = window.Capacitor; return C && C.Plugins && C.Plugins[p] && C.Plugins[p][m] ? C.Plugins[p][m](o) : C.nativePromise(p, m, o); };
-async function fetch(url, o = {}) {
+async function __netFetch(url, o = {}) {
   if (!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) return window.fetch(url, { ...o, signal: undefined });
   const headers = { ...(o.headers || {}) };
   if (!Object.keys(headers).some((k) => k.toLowerCase() === 'user-agent')) headers['User-Agent'] = UA_ANDROID;
@@ -30,6 +30,26 @@ async function fetch(url, o = {}) {
     text: async () => txt, json: async () => JSON.parse(txt)
   };
 }
+
+/* قاطع الدائرة: أي نطاق يفشل 3 مرات متتالية (انقطاع/مهلة/5xx) نوقف الطلبات إليه 5–30 دقيقة بدل ما نضيّع الوقت معه؛ أول نجاح يرجّعه */
+const __HH = (() => { try { return JSON.parse(localStorage.getItem('wa_hosts') || '{}'); } catch { return {}; } })();
+const __saveHH = () => { try { localStorage.setItem('wa_hosts', JSON.stringify(__HH)); } catch {} };
+const __NOGATE = /(^|\.)(googleapis\.com|gstatic\.com|google\.com)$/i;
+function __hostFail(st) { st.f = (st.f || 0) + 1; st.t = Date.now(); if (st.f >= 3) st.until = Date.now() + Math.min(30, 5 * (st.f - 2)) * 60000; __saveHH(); }
+async function fetch(url, o = {}) {
+  let h = ''; try { h = new URL(String(url)).host; } catch {}
+  const st = h && !__NOGATE.test(h) ? (__HH[h] = __HH[h] || { f: 0, until: 0, ok: 0, ms: 0, t: 0 }) : null;
+  if (st && st.until > Date.now()) throw new Error('المصدر متوقف مؤقتًا: ' + h);
+  const t0 = Date.now();
+  try {
+    const r = await __netFetch(url, o);
+    if (st) { if (r.status === 0 || r.status === 502 || r.status === 503 || r.status === 504 || r.status >= 520) __hostFail(st); else { st.f = 0; st.until = 0; st.ok = Date.now(); st.ms = Date.now() - t0; __saveHH(); } }
+    return r;
+  } catch (e) { if (st) __hostFail(st); throw e; }
+}
+window.__srcHealth = () => JSON.parse(JSON.stringify(__HH));
+window.__srcReset = (h) => { if (h) delete __HH[h]; else Object.keys(__HH).forEach((k) => delete __HH[k]); __saveHH(); };
+window.__srcBan = (h, min) => { const st = (__HH[h] = __HH[h] || { f: 0, until: 0, ok: 0, ms: 0, t: 0 }); st.f = Math.max(st.f, 3); st.until = Date.now() + (min || 10) * 60000; __saveHH(); };
 
 const __H = {};
 const ipcMain = { handle: (n, f) => { __H[n] = f; } };
@@ -76,6 +96,26 @@ ipcMain.handle('anilist:info', async (_e, title) => {
 });
 
 // AniList: وصف الأنمي + التقييم (المصدر الأول: أدق وأسرع من Jikan)
+// AniList: غلاف الأنمي (لما يكون البوستر مكسّر)
+ipcMain.handle('anilist:cover', async (_e, names) => {
+  const nz = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/g, '');
+  const same = (a, b) => { if (!a || !b) return false; if (a === b) return true; const [sh, lo] = a.length < b.length ? [a, b] : [b, a]; return sh.length >= 5 && lo.includes(sh) && sh.length / lo.length >= 0.6; };
+  const list = [...new Set((names || []).map((n) => String(n || '').trim()).filter(Boolean))].slice(0, 3);
+  const want = list.map(nz).filter(Boolean);
+  const query = 'query($s:String){Page(perPage:8){media(search:$s,type:ANIME,sort:SEARCH_MATCH){title{romaji english native} synonyms coverImage{extraLarge large}}}}';
+  for (const n of list) {
+    try {
+      const r = await fetch('https://graphql.anilist.co', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ query, variables: { s: n.slice(0, 200) } }), signal: AbortSignal.timeout(10000) });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const media = (j.data && j.data.Page && j.data.Page.media) || [];
+      const a = media.find((x) => [x.title && x.title.romaji, x.title && x.title.english, x.title && x.title.native, ...(x.synonyms || [])].map(nz).some((t) => want.some((w) => same(t, w))));
+      const c = a && a.coverImage && (a.coverImage.extraLarge || a.coverImage.large);
+      if (c) return c;
+    } catch {}
+  }
+  return '';
+});
 ipcMain.handle('anilist:desc', async (_e, names) => {
   const nz = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/g, '');
   const same = (a, b) => { if (!a || !b) return false; if (a === b) return true; const [sh, lo] = a.length < b.length ? [a, b] : [b, a]; return sh.length >= 6 && lo.includes(sh) && sh.length / lo.length >= 0.7; };
@@ -159,7 +199,7 @@ ipcMain.handle('anilist:genre', async (_e, o) => {
   const vars = { page: Math.max(1, Number(o.page) || 1), formats: fm, sort: [sort] };
   if (o.kind === 'g') { decl.push('$genre:String'); args.push('genre:$genre'); vars.genre = String(o.value || ''); }
   else if (o.kind === 't') { decl.push('$tag:String'); args.push('tag:$tag'); vars.tag = String(o.value || ''); }
-  if (o.status === 'RELEASING') { decl.push('$status:MediaStatus'); args.push('status:$status'); vars.status = 'RELEASING'; }
+  if (o.status === 'RELEASING' || o.status === 'FINISHED') { decl.push('$status:MediaStatus'); args.push('status:$status'); vars.status = o.status; }
   const query = 'query(' + decl.join(',') + '){Page(page:$page,perPage:36){pageInfo{hasNextPage} media(' + args.join(',') + '){id format averageScore episodes title{romaji english native} coverImage{large medium}}}}';
   let r = null;
   for (let t = 0; t < 3; t++) {
@@ -680,6 +720,13 @@ async function __invoke(n, ...a) {
   if (n === 'notify:show') return __call('Notify', 'show', a[0] || {}).then(() => true).catch(() => false);
   if (n === 'notify:sync') return __call('Notify', 'sync', a[0] || {}).then(() => true).catch(() => false);
   if (n === 'notify:perm') return __call('Notify', 'requestPerm', {}).catch(() => ({ granted: false }));
+  if (n === 'notify:status') return __call('Notify', 'status', {}).catch(() => ({ granted: false, enabled: false, battery: true, count: 0, na: true }));
+  if (n === 'notify:log') return __call('Notify', 'getLog', {}).then((r) => (r && r.items) || []).catch(() => []);
+  if (n === 'notify:clear') return __call('Notify', 'clearLog', {}).then(() => true).catch(() => false);
+  if (n === 'notify:test') return __call('Notify', 'test', {}).then(() => true).catch(() => false);
+  if (n === 'notify:check') return __call('Notify', 'checkNow', {}).then(() => true).catch(() => false);
+  if (n === 'notify:settings') return __call('Notify', 'openSettings', {}).then(() => true).catch(() => false);
+  if (n === 'notify:battery') return __call('Notify', 'batterySettings', {}).then(() => true).catch(() => false);
   if (n === 'notify:launch') return __call('Notify', 'getLaunch', {}).catch(() => ({}));
   if (n in __H) return __H[n]({}, ...a);
   if (n in __NOOP) return __NOOP[n];
@@ -706,8 +753,16 @@ contextBridge.exposeInMainWorld('api', {
   notifySync: (o) => ipcRenderer.invoke('notify:sync', o),
   notifyPerm: () => ipcRenderer.invoke('notify:perm'),
   notifyLaunch: () => ipcRenderer.invoke('notify:launch'),
+  notifyStatus: () => ipcRenderer.invoke('notify:status'),
+  notifyLog: () => ipcRenderer.invoke('notify:log'),
+  notifyClear: () => ipcRenderer.invoke('notify:clear'),
+  notifyTest: () => ipcRenderer.invoke('notify:test'),
+  notifyCheck: () => ipcRenderer.invoke('notify:check'),
+  notifySettings: () => ipcRenderer.invoke('notify:settings'),
+  notifyBattery: () => ipcRenderer.invoke('notify:battery'),
   onNotifyOpen: (cb) => ipcRenderer.on('notify:open', (_e, id) => cb(id)),
   anilistDesc: (names) => ipcRenderer.invoke('anilist:desc', names),
+  anilistCover: (names) => ipcRenderer.invoke('anilist:cover', names),
   schedule: (d) => ipcRenderer.invoke('anilist:schedule', d),
   recent: (d) => ipcRenderer.invoke('anilist:recent', d),
   genre: (o) => ipcRenderer.invoke('anilist:genre', o),

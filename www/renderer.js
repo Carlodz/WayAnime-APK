@@ -732,13 +732,13 @@ async function dubbedList() {
     customList().then(l => l.filter(isDub)), dubbedRemote(),
     ...qs.map(q => witSearch(q)), ...qs.map(q => window.api.ar.search(q).catch(() => []))
   ]);
-  return dedupe([...a4, ...sd, ...cu, ...rem, ...rs.flat().map(m => ({ ...m, dubbed: true }))], newSeen());
+  return dedupe([...sd, ...a4, ...cu, ...rem, ...rs.flat().map(m => ({ ...m, dubbed: true }))], newSeen());   // المدبلج: Stardima ثم Anime4up ثم الباقي
 }
 
 /* ===== WitAnime (منقول من anime_scraper) — التحليل بـ DOMParser ===== */
 /* إذا تغيّر نطاق WitAnime زيد النطاق الجديد فـ أول القائمة WIT_HOSTS (كيجرّب الباقي وحدو) */
 const WIT_HOSTS = ['https://witanime.art/', 'https://witanime.you/', 'https://witanime.com/', 'https://witanime.world/'];
-let WIT = WIT_HOSTS[0];
+let WIT = (WIT_HOSTS.includes(store.get('witHost', '')) ? store.get('witHost', '') : WIT_HOSTS[0]);
 async function witHtml(u) {
   let path = String(u || '');
   if (/^https?:/i.test(path)) { try { const x = new URL(path); path = x.pathname + x.search; } catch {} }
@@ -746,7 +746,7 @@ async function witHtml(u) {
   for (const h of [WIT, ...WIT_HOSTS.filter(x => x !== WIT)]) {
     try {
       const t = await window.api.html(h + path);
-      if (t && t.length > 500) { WIT = h; return new DOMParser().parseFromString(t, 'text/html'); }
+      if (t && t.length > 500) { if (WIT !== h) store.set('witHost', h); WIT = h; return new DOMParser().parseFromString(t, 'text/html'); }
     } catch (e) {}
   }
   throw new Error('تعذّر الاتصال بـ WitAnime (جرّب تغيير النطاق في WIT_HOSTS)');
@@ -755,7 +755,33 @@ const abs = (h) => { try { return new URL(h, WIT).href; } catch { return ''; } }
 const witSlug = (href) => {
   try { const p = new URL(href, WIT).pathname.split('/').filter(Boolean); const i = p.indexOf('anime'); return p[i >= 0 ? i + 1 : p.length - 1] || ''; } catch { return ''; }
 };
-const imgOf = (el) => { const i = el && el.querySelector('img'); if (!i) return ''; const s = i.getAttribute('src') || ''; return abs(s.startsWith('data:') ? (i.getAttribute('data-src') || '') : (s || i.getAttribute('data-src') || '')); };
+/* استخراج البوستر بشكل متين: lazy-load (data-src / data-lazy-src / data-original / srcset) + noscript + background-image، ورفع الجودة بحذف مقاس الصورة المصغّرة */
+const _badImg = (u) => !u || /^data:|blank\.|placeholder|loading\.|loader|spacer|1x1|\.svg(\?|$)/i.test(u);
+const _bestSrcset = (ss) => { const a = String(ss || '').split(',').map(x => x.trim().split(/\s+/)).filter(x => x[0]); if (!a.length) return ''; a.sort((p, q) => (parseFloat(q[1]) || 0) - (parseFloat(p[1]) || 0)); return a[0][0]; };
+function pickImg(el, A) {
+  if (!el) return '';
+  const cands = [];
+  const fromImg = (i) => {
+    ['data-src', 'data-lazy-src', 'data-original', 'data-image', 'data-lazy', 'data-bg'].forEach(k => cands.push(i.getAttribute(k)));
+    cands.push(_bestSrcset(i.getAttribute('data-srcset')), _bestSrcset(i.getAttribute('srcset')), i.getAttribute('src'));
+  };
+  el.querySelectorAll('img').forEach(fromImg);
+  el.querySelectorAll('source').forEach(o => cands.push(_bestSrcset(o.getAttribute('srcset') || o.getAttribute('data-srcset'))));
+  el.querySelectorAll('noscript').forEach(n => { const m = (n.textContent || n.innerHTML || '').match(/<img[^>]+src=["']([^"']+)/i); if (m) cands.push(m[1]); });
+  [el, ...el.querySelectorAll('[style*="url("],[data-bg],[data-background]')].forEach(n => {
+    const m = (n.getAttribute('style') || '').match(/url\((['"]?)(.*?)\1\)/); if (m) cands.push(m[2]);
+    cands.push(n.getAttribute('data-bg'), n.getAttribute('data-background'));
+  });
+  const good = cands.find(u => !_badImg(u));
+  if (!good) return '';
+  const raw = A(good), hq = hiQ(raw);
+  if (hq !== raw) _thumbOf.set(hq, raw);
+  return hq;
+}
+const _thumbOf = new Map();
+/* صورة مصغّرة ووردبريس (poster-300x450.jpg) -> الأصلية. إن فشلت الأصلية نرجعو للمصغّرة */
+const hiQ = (u) => u ? String(u).replace(/-\d{2,4}x\d{2,4}(?=\.(?:jpe?g|png|webp)(?:\?|$))/i, '').replace(/([?&])(w|width|resize|size)=\d+/ig, '$1$2=600') : '';
+const imgOf = (el) => pickImg(el, abs);
 const witCard = (c) => {
   const a = c.querySelector('.anime-card-title h3 > a') || c.querySelector('h3 > a');
   if (!a) return null;
@@ -774,6 +800,13 @@ async function witSearch(q) {
   if (!witCache.has(q)) witCache.set(q, witHtml(`?search_param=animes&s=${encodeURIComponent(q)}`).then(witCards).catch(() => { witCache.delete(q); return []; }));
   return witCache.get(q);
 }
+async function a4uLatest() {                                  // أنمي حديث من الصفحة الرئيسية لـ anime4up (احتياطي: من آخر الحلقات)
+  try {
+    let l = a4uCards(await a4uHtml(''));
+    if (!l.length) { const seen = new Set(); l = siteEpCards(await a4uHtml('episode/'), 'a4u').filter(x => x.id && !seen.has(x.id) && seen.add(x.id)); }
+    return l.slice(0, 40).map(m => ({ ...m, dubbed: A4U_DUB_RE.test(m.name || '') }));
+  } catch { return []; }
+}
 async function witLatest() { try { return witCards(await witHtml('episode')); } catch { return []; } }
 async function witSeason() {
   try {
@@ -786,7 +819,7 @@ async function witSeason() {
 /* ===== anime4up — مصدر الأنمي المدبلج (نفس قالب WitAnime) =====
    إذا تغيّر النطاق (كيتبدّل بزاف) زيد النطاق الجديد فـ أول القائمة A4U_HOSTS */
 const A4U_HOSTS = ['https://anime4up.rest/', 'https://w1.anime4up.rest/', 'https://anime4up.cam/', 'https://anime4up.pro/'];
-let a4uBase = A4U_HOSTS[0];
+let a4uBase = (A4U_HOSTS.includes(store.get('a4uHost', '')) ? store.get('a4uHost', '') : A4U_HOSTS[0]);
 const a4uAbs = (h) => { try { return new URL(h, a4uBase).href; } catch { return ''; } };
 async function a4uHtml(u) {
   const isAbs = /^https?:/i.test(u), bad = [];
@@ -797,13 +830,13 @@ async function a4uHtml(u) {
   for (const h of order) {
     try {
       const t = await window.api.html(h + path);
-      if (t && t.length > 500) { a4uBase = h; return new DOMParser().parseFromString(t, 'text/html'); }
+      if (t && t.length > 500) { if (a4uBase !== h) store.set('a4uHost', h); a4uBase = h; return new DOMParser().parseFromString(t, 'text/html'); }
     } catch (e) { bad.push(h); }
   }
   throw new Error('تعذّر الاتصال بـ anime4up (جرّب تغيير النطاق في A4U_HOSTS)');
 }
 const a4uSlug = (href) => { try { const p = new URL(href, a4uBase).pathname.split('/').filter(Boolean); const i = p.indexOf('anime'); return p[i >= 0 ? i + 1 : p.length - 1] || ''; } catch { return ''; } };
-const a4uImg = (el) => { const i = el && el.querySelector('img'); if (!i) return ''; const s = i.getAttribute('src') || ''; return a4uAbs(s.startsWith('data:') ? (i.getAttribute('data-src') || '') : (s || i.getAttribute('data-src') || '')); };
+const a4uImg = (el) => pickImg(el, a4uAbs);
 const a4uCard = (c) => {
   const a = c.querySelector('.anime-card-title h3 > a') || c.querySelector('h3 > a') || c.querySelector('a[href*="/anime/"]');
   if (!a) return null;
@@ -1046,7 +1079,7 @@ function alCard(m) {
   return `<div class="card alc" tabindex="0" data-q="${esc(m.name)}" data-q2="${esc(m.nameEn)}"><img loading="lazy" src="${esc(m.poster)}" alt=""><p>${esc(m.name)}</p><div class="cm"><span>${esc(m.type || '')}${m.eps ? ' · ' + esc(m.eps) + ' حلقة' : ''}</span></div><div class="cm"><b class="rt">${esc(m.score || '')}</b></div></div>`;
 }
 const anyCard = (m) => (m.al ? alCard(m) : arCard(m));
-const AR_SECS = [['EPS', 'آخر الحلقات'], ['latest', 'آخر الإضافات'], ['DUBBED', 'مدبلج'], ['POPULARITY', 'الأكثر شعبية'], ['HIGHEST_RATE', 'الأعلى تقييماً'], ['AIRING', 'يُعرض حالياً'], ['SEASON', 'أنمي الموسم'], ['SCHEDULE', 'جدول الحلقات']];
+const AR_SECS = [['ALL', 'المكتبة الكاملة'], ['EPS', 'آخر الحلقات'], ['latest', 'آخر الإضافات'], ['DUBBED', 'مدبلج'], ['POPULARITY', 'الأكثر شعبية'], ['HIGHEST_RATE', 'الأعلى تقييماً'], ['ONGOING', 'مستمر'], ['COMPLETED', 'مكتمل'], ['SEASON', 'أنمي الموسم'], ['SCHEDULE', 'جدول الحلقات']];
 const AR_TYPES = [['SERIES', 'مسلسلات'], ['MOVIE', 'أفلام'], ['OVA', 'OVA'], ['SPECIAL', 'خاصة']];
 const AR_PAGE = 48;
 
@@ -1095,11 +1128,18 @@ async function openByTitle(c) {
   toast('جارٍ فتح «' + t + '»…');
   try {
     const titles = [...new Set([t, r].filter(Boolean))];
-    const batches = await Promise.all(titles.map(q => Promise.all([window.api.ar.search(q).catch(() => []), witSearch(q)])));
+    const batches = await Promise.all(titles.map(q => Promise.all([window.api.ar.search(q).catch(() => []), witSearch(q).catch(() => []), a4uSearch(q).catch(() => []), window.api.dub.search(q).catch(() => [])])));
     const pool = dedupe(batches.flat(2), newSeen());
     let hit = null, hs = 0;
     for (const m of pool) { const sc = _score(m, titles); if (sc > hs) { hs = sc; hit = m; } }
-    if (hit && hs >= 0.6) { arCache.set(hit.id, hit); return openAr(hit.id, c.dataset.ep || undefined); }
+    if (!hit || hs < 0.45) {   // تطابق ضعيف: نجرّب كلمات أقصر من العنوان (بدون الموسم/الأجزاء)
+      const short = [...new Set(titles.map(x => String(x).replace(/[:\-–].*$/, '').replace(/\b(season|part|cour|الموسم|الجزء)\b.*$/i, '').trim()).filter(x => x && x.length > 2 && !titles.includes(x)))];
+      for (const q of short) {
+        const rs = dedupe((await Promise.all([window.api.ar.search(q).catch(() => []), witSearch(q).catch(() => []), a4uSearch(q).catch(() => [])])).flat(), newSeen());
+        for (const m of rs) { const sc = _score(m, [...titles, q]); if (sc > hs) { hs = sc; hit = m; } }
+      }
+    }
+    if (hit && hs >= 0.45) { arCache.set(hit.id, hit); return openAr(hit.id, c.dataset.ep || undefined); }
   } catch {}
   arLoadCatalog(r);   // ما لقيناش تطابق مؤكد: نعرضو نتائج البحث باش تختار نتا
 }
@@ -1178,12 +1218,12 @@ async function afyLatestEpisodes() {
 }
 const sdLatestEps = () => window.api.dub.latest().then(l => l.map(m => ({ id: m.id, name: m.name, ep: m.ep, poster: m.poster, src: 'sd', dubbed: true })));
 
-const EP_TOOLS = [
-  { key: 'a3r', name: 'Anime3rb', run: a3rLatest },
-  { key: 'wit', name: 'WitAnime', run: witLatestEps },
+const EP_TOOLS = [                                         // الترتيب = الأولوية: Anime4up أولاً
   { key: 'a4u', name: 'Anime4up', run: a4uLatestEps },
   { key: 'afy', name: 'Animeify', run: afyLatestEpisodes },
-  { key: 'sd', name: 'Stardima (مدبلج)', run: sdLatestEps }
+  { key: 'wit', name: 'WitAnime', run: witLatestEps },
+  { key: 'sd', name: 'Stardima (مدبلج)', run: sdLatestEps },
+  { key: 'a3r', name: 'Anime3rb', run: a3rLatest }
 ];
 const epWithTimeout = (p, ms) => Promise.race([p, new Promise((_, rj) => setTimeout(() => rj(new Error('انتهى الوقت')), ms))]);
 
@@ -1201,7 +1241,7 @@ function epSame(a, b) {
 }
 const epKey = (x) => (x.akey || epAnimeKey(x.name)) + '#' + x.ep;
 function epMerge(batches) {
-  const order = ['afy', 'a4u', 'wit', 'sd', 'a3r'];     // أي مصدر نفتحو بيه داخل التطبيق (id)
+  const order = ['a4u', 'afy', 'wit', 'sd', 'a3r'], dubOrder = ['sd', 'a4u', 'afy', 'wit', 'a3r'];   // المترجم: Anime4up أولاً — المدبلج: Stardima أولاً     // أي مصدر نفتحو بيه داخل التطبيق (id)
   const maxLen = Math.max(0, ...batches.map(b => b.length)), flat = [];
   for (let i = 0; i < maxLen; i++) batches.forEach(b => { if (b[i]) flat.push(b[i]); });   // نخلطو المصادر باش ما يغلبش واحد
   const keysFor = (x) => [epAnimeKey(x.name), x.alt ? epAnimeKey(x.alt) : '', x.q2 ? epAnimeKey(x.q2) : ''].filter(Boolean);
@@ -1218,32 +1258,106 @@ function epMerge(batches) {
     const pool = g.items;
     const top = Math.max(...pool.map(x => parseFloat(x.ep) || 0));
     const at = pool.filter(x => (parseFloat(x.ep) || 0) === top);
-    const pick = (f) => order.map(k => at.find(x => x.src === k && f(x))).find(Boolean);
+    const ord = g.dub ? dubOrder : order;
+    const pick = (f) => ord.map(k => at.find(x => x.src === k && f(x))).find(Boolean);
     const main = pick(x => x.id) || at[0];
     const alIt = g.items.find(x => x.q2);
-    return {
+    const o = {
       id: main.id || '', name: epBaseName(main.name) || main.name, ep: String(top), akey: g.ks[0], q2: (alIt && alIt.q2) || main.alt || '',
-      poster: (at.find(x => x.poster) || {}).poster || '', src: main.src, srcs: [...new Set(at.map(x => x.src))],
+      posters: [...new Set((g.dub ? ['sd', 'a4u', 'a3r', 'afy', 'wit'] : ['a4u', 'a3r', 'afy', 'wit', 'sd']).flatMap(k => [...at, ...pool].filter(x => x.src === k && x.poster).map(x => x.poster)))],
+      poster: '', src: main.src, srcs: [...new Set(at.map(x => x.src))],
       url: (at.find(x => x.url) || {}).url || '', dubbed: g.dub
     };
+    o.poster = o.posters[0] || ''; return o;
   });
 }
 const EPM = { status: {}, at: 0, f: 'sub' };   // f: sub (مترجم) | all | dub
-const epFilt = (list) => EPM.f === 'dub' ? list.filter(x => x.dubbed) : EPM.f === 'sub' ? list.filter(x => !x.dubbed) : [...list.filter(x => !x.dubbed), ...list.filter(x => x.dubbed)];
+const EP_NEW_MS = 12 * 3600 * 1000;                         // الحلقة تبقى «جديد» 12 ساعة من أول ظهور
+const epIsNew = (x) => !!(x.fs && Date.now() - x.fs < EP_NEW_MS) || epNew.has(epKey(x));
+/* نسجّل وقت أول ظهور لكل حلقة (أول تشغيل: بلا «جديد» حتى لا تكون كلها جديدة) ثم نرتّب: الأحدث ظهورًا فوق */
+function epStamp(list) {
+  const seen = store.get('epFirst', {}), first = !Object.keys(seen).length, now = Date.now();
+  list.forEach(x => { const k = epKey(x); if (!(k in seen)) seen[k] = first ? 0 : now; x.fs = seen[k]; });
+  const ks = Object.keys(seen); if (ks.length > 800) ks.sort((a, b) => seen[a] - seen[b]).slice(0, ks.length - 600).forEach(k => delete seen[k]);
+  store.set('epFirst', seen);
+  return list.map((x, i) => [x, i]).sort((a, b) => (b[0].fs - a[0].fs) || (a[1] - b[1])).map(a => a[0]);   // مستقر: نفس ترتيب المواقع داخل نفس الدفعة
+}
+const epFilt = (list) => EPM.f === 'dub' ? list.filter(x => x.dubbed) : EPM.f === 'sub' ? list.filter(x => !x.dubbed) : [...list.filter(epIsNew), ...list.filter(x => !epIsNew(x) && !x.dubbed), ...list.filter(x => !epIsNew(x) && x.dubbed)];
 async function latestEpisodes() {
+  const off = store.get('toolOff', {}), bad = store.get('toolBad', {});
   const res = await Promise.all(EP_TOOLS.map(async t => {
-    try { const l = await epWithTimeout(t.run(), 40000); EPM.status[t.key] = { ok: true, n: l.length }; return l; }
-    catch (e) { EPM.status[t.key] = { ok: false, err: errMsg(e) }; return []; }
+    if ((off[t.key] || 0) > Date.now() || (window.WASRC && WASRC.dead(t.key))) { EPM.status[t.key] = { ok: false, err: 'متوقف تلقائيًا (المصدر لا يعمل الآن)', skipped: true }; return []; }
+    try { const l = await epWithTimeout(t.run(), 40000); EPM.status[t.key] = { ok: true, n: l.length }; if (bad[t.key]) { delete bad[t.key]; store.set('toolBad', bad); } return l; }
+    catch (e) {
+      const msg = errMsg(e); EPM.status[t.key] = { ok: false, err: msg };
+      const perm = /Cloudflare|محمي|غير مدعوم|غير متوفرة/.test(msg);               // عطل دائم على أندرويد: نوقفه 6 ساعات
+      bad[t.key] = (bad[t.key] || 0) + 1;
+      if (perm || bad[t.key] >= 2) { off[t.key] = Date.now() + (perm ? 6 * 3600e3 : 10 * 60e3); store.set('toolOff', off); }
+      store.set('toolBad', bad); return [];
+    }
   }));
   EPM.at = Date.now();
-  return epMerge(res);
+  return epStamp(epMerge(res));
 }
 const epSrcName = { a3r: 'Anime3rb', a4u: 'Anime4up', wit: 'WitAnime', sd: 'Stardima', afy: 'Animeify' };
 const epNew = new Set();                                   // حلقات جديدة (تزادت من آخر فحص)
 function epCard(x) {
   const srcs = (x.srcs || [x.src]).map(k => epSrcName[k] || '').filter(Boolean).join(' · ');
-  return `<div class="card ecard" tabindex="0" data-id="${esc(x.id)}" data-ep="${esc(x.ep)}" data-q="${esc(x.name)}" data-src="${esc(x.src)}" data-srcs="${esc((x.srcs || [x.src]).join(','))}" data-url="${esc(x.url || '')}" data-q2="${esc(x.q2 || '')}"><span class="badge epb">الحلقة ${esc(x.ep)}</span>${epNew.has(epKey(x)) ? '<span class="badge" style="top:auto;bottom:58px">جديد</span>' : ''}<img loading="lazy" src="${esc(x.poster)}" alt=""><p>${esc(x.name)}</p><div class="cm"><span>${x.dubbed ? I.mic + ' مدبلج' : ''}</span></div></div>`;
+  const alts = (x.posters || [x.poster]).filter(Boolean);
+  const first = alts[0] || '';
+  return `<div class="card ecard" tabindex="0" data-id="${esc(x.id)}" data-ep="${esc(x.ep)}" data-q="${esc(x.name)}" data-src="${esc(x.src)}" data-srcs="${esc((x.srcs || [x.src]).join(','))}" data-url="${esc(x.url || '')}" data-q2="${esc(x.q2 || '')}"><span class="badge epb">الحلقة ${esc(x.ep)}</span>${epIsNew(x) ? '<span class="badge epnew">جديد</span>' : ''}<img class="epimg" decoding="async" referrerpolicy="no-referrer" data-alts="${esc(JSON.stringify(alts.slice(1)))}" data-nm="${esc(x.name)}" ${first ? `src="${esc(first)}"` : ''} alt=""><p>${esc(x.name)}</p><div class="cm"><span>${x.dubbed ? I.mic + ' مدبلج' : ''}</span></div></div>`;
 }
+/* ===== إصلاح أي بوستر مكسّر (فـ كل التطبيق) =====
+   1) نعاود بلا Referer  2) النسخة المصغّرة/البدائل  3) نبحث عن الغلاف فـ AniList ثم MyAnimeList ونحفظه  4) وإلا بطاقة بديلة */
+const _pf = { q: [], busy: false };
+function _imgNames(im) {
+  const c = im.closest('.card, .smrow, .rc, .ecard'), d = (c && c.dataset) || {}, m = d.id && typeof arCache !== 'undefined' ? arCache.get(d.id) : null;
+  const t = c ? (c.querySelector('p, b') || {}).textContent : '';
+  return [...new Set([d.q2, m && m.nameEn, im.dataset.nm, d.q, m && m.name, t, im.alt].filter(Boolean).map(x => String(x).replace(/\s+/g, ' ').trim()).filter(x => x.length > 1))].slice(0, 3);
+}
+async function _pfRun() {
+  if (_pf.busy) return; _pf.busy = true;
+  while (_pf.q.length) {
+    const im = _pf.q.shift(); if (!im.isConnected) continue;
+    const names = _imgNames(im), key = (names[0] || '').toLowerCase(), cache = store.get('posterFix', {});
+    if (!names.length) { im.classList.add('noimg'); continue; }
+    let u = cache[key];
+    if (!u) {
+      try { u = await window.api.anilistCover(names); } catch {}
+      if (!u) { try { const r = await window.api.get('https://api.jikan.moe/v4/anime?limit=1&sfw=true&q=' + encodeURIComponent(names[0])); const d = (r && r.data && r.data[0]) || null; u = d && d.images && d.images.jpg && (d.images.jpg.large_image_url || d.images.jpg.image_url) || ''; } catch {} }
+      if (u) { cache[key] = u; const ks = Object.keys(cache); if (ks.length > 400) delete cache[ks[0]]; store.set('posterFix', cache); }
+      await new Promise(ok => setTimeout(ok, 700));
+    }
+    if (!im.isConnected) continue;
+    if (u) { im.dataset.fixed = '1'; im.referrerPolicy = 'no-referrer'; im.classList.remove('noimg'); im.src = u; } else im.classList.add('noimg');
+  }
+  _pf.busy = false;
+}
+function fixImg(im) {
+  if (im.dataset.fixed) { im.classList.add('noimg'); return; }
+  const src = im.getAttribute('src') || '';
+  if (src && !im.dataset.rp) { im.dataset.rp = '1'; im.referrerPolicy = 'no-referrer'; im.removeAttribute('src'); im.src = src; return; }   // مواقع تمنع الصور مع Referer
+  const th = _thumbOf.get(im.src); if (th) { _thumbOf.delete(im.src); im.src = th; return; }                                              // الأصلية فشلت: نرجعو للمصغّرة
+  let alts = []; try { alts = JSON.parse(im.dataset.alts || '[]'); } catch {}
+  if (alts.length) { const n = alts.shift(); im.dataset.alts = JSON.stringify(alts); im.src = n; return; }
+  im.dataset.fixed = '1'; _pf.q.push(im); _pfRun();
+}
+document.addEventListener('error', (e) => {
+  const im = e.target; if (!im || im.tagName !== 'IMG') return;
+  const s = im.getAttribute('src') || ''; if (/^(data:|assets\/|blob:)/.test(s) || im.closest('.player, #pl, video')) return;
+  fixImg(im);
+}, true);
+/* صور بلا رابط أو فشلت بصمت: نفحص الجديد كل مرة تتغير الصفحة */
+(() => {
+  let t = 0;
+  const scan = () => document.querySelectorAll('.card img:not([data-chk]), .smrow img:not([data-chk]), .rc img:not([data-chk])').forEach(im => {
+    const s = im.getAttribute('src');
+    if (!s) { im.dataset.chk = '1'; if (!im.dataset.fixed) { im.dataset.fixed = '1'; _pf.q.push(im); } }
+    else if (im.complete && im.naturalWidth === 0 && im.dataset.chk !== '1') { im.dataset.chk = '1'; fixImg(im); }
+    else if (im.complete) im.dataset.chk = '1';
+  });
+  new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { scan(); _pfRun(); }, 700); }).observe(document.body, { childList: true, subtree: true });
+})();
 /* شريط حالة الأدوات (واش كل أداة خدمات ولا لا) + زر تحديث الآن */
 function epStatusHtml() {
   const chips = EP_TOOLS.map(t => {
@@ -1262,10 +1376,11 @@ function epGridHtml(list) {
   const empty = EPM.f === 'sub' && list.length ? 'لم نجد حلقات مترجمة حاليًا — اضغط «الكل» أو «مدبلج».' : 'لم نجد حلقات جديدة حاليًا. راجع الأدوات في الأعلى: التي تحمل علامة الخطأ (X) لم تعمل (تغيّر النطاق أو الموقع محمي).';
   return epStatusHtml() + (shown.length ? shown.map(epCard).join('') : `<p class="mute" style="grid-column:1/-1">${empty}</p>`);
 }
+function epFixMissing() { document.querySelectorAll('img.epimg:not([src])').forEach(im => { if (!im.dataset.fixed) { im.dataset.fixed = '1'; _pf.q.push(im); } }); _pfRun(); }
 function bindEpStatus() {
   document.querySelectorAll('.epf').forEach(c => c.onclick = () => {
     EPM.f = c.dataset.f; const box = $('#agrid'); if (!box) return;
-    box.innerHTML = epGridHtml(AF.list); bindCards(); bindEpStatus();
+    box.innerHTML = epGridHtml(AF.list); bindCards(); bindEpStatus(); epFixMissing();
     const n = $('#acount'); if (n) n.textContent = epFilt(AF.list).length + ' حلقة';
   });
   const st = $('#epSt'); if (st) st.onclick = () => { const d = $('#epStD'); if (d) d.hidden = !d.hidden; };
@@ -1293,13 +1408,24 @@ async function openEpCard(el) {
   if (hit) return openAr(hit.id, d.ep, extra);
   arLoadCatalog(d.q);
 }
+
+/* ===== مستمر / مكتمل ===== */
+const ST_SECS = { ONGOING: 'RELEASING', COMPLETED: 'FINISHED' };
+const stOf = () => (AF.genre || ST_SECS[AF.sec]) ? (ST_SECS[AF.sec] || (AF.sec === 'AIRING' ? 'RELEASING' : '')) : '';
+const isOngoingTxt = (t) => /releas|airing|ongoing|current|مستمر|يعرض|يُعرض|جاري|لم\s*ينته/i.test(String(t || ''));
+const isDoneTxt = (t) => /finish|complet|ended|مكتمل|منتهي|انتهى|تم\s*الانتهاء/i.test(String(t || ''));
+function libByStatus(kind) {
+  const all = (window.WALIB ? WALIB.get(AF.type) : []);
+  return all.filter(m => kind === 'RELEASING' ? isOngoingTxt(m.status) && !isDoneTxt(m.status) : isDoneTxt(m.status) && !isOngoingTxt(m.status));
+}
 const AF = { sec: 'latest', genre: '', type: 'SERIES', list: [], seen: newSeen(), off: 0, busy: false, done: false, token: 0 };
 
 function arQuery() {
   const base = { limit: AR_PAGE, from: AF.off };
   if (AF.genre) return { ...base, filterType: 'GENRE', filterData: AF.genre, type: AF.type };
+  if (AF.sec === 'ALL') return { ...base, filterType: 'SORT', filterData: 'POPULARITY', type: AF.type };
   if (AF.sec === 'latest') return AF.type === 'SERIES' ? { ...base, latest: true } : { ...base, type: AF.type };
-  if (AF.sec === 'AIRING') return { ...base, filterType: 'STATUS', filterData: 'AIRING', type: AF.type };
+  if (AF.sec === 'AIRING' || AF.sec === 'ONGOING') return { ...base, filterType: 'STATUS', filterData: 'AIRING', type: AF.type };
   return { ...base, filterType: 'SORT', filterData: AF.sec, type: AF.type };
 }
 
@@ -1313,10 +1439,10 @@ async function arMore(reset) {
   if (reset) box.innerHTML = '<p class="mute">جارٍ التحميل…</p>';
   try {
     let fresh = [], alOk = false;
-    if (AF.genre && !AF.alFail) {                                   // تصنيف حقيقي من AniList (genre/tag) — مرتب بالشعبية
+    if ((AF.genre || ST_SECS[AF.sec]) && !AF.alFail) {                                   // تصنيف/حالة حقيقية من AniList — مرتب بالشعبية
       try {
-        const [k, v] = alGenreOf(AF.genre);
-        const r = await window.api.genre({ kind: k, value: v, type: AF.type, page: AF.off + 1, status: AF.sec === 'AIRING' ? 'RELEASING' : '' });
+        const [k, v] = AF.genre ? alGenreOf(AF.genre) : ['', ''];
+        const r = await window.api.genre({ kind: k, value: v, type: AF.type, page: AF.off + 1, status: ST_SECS[AF.sec] || (AF.sec === 'AIRING' ? 'RELEASING' : '') });
         if (tk !== AF.token) return;
         AF.off += 1; AF.done = !r.next; alOk = true;
         fresh = dedupe(r.list.map(alToM), AF.seen);
@@ -1331,7 +1457,7 @@ async function arMore(reset) {
       AF.done = true;
       store.set('epSeen2', [...new Set([...store.get('epSeen2', []), ...list.map(epKey)])].slice(-3000));
       box.innerHTML = epGridHtml(list);
-      AF.list = list; bindCards(); bindEpStatus();
+      AF.list = list; bindCards(); bindEpStatus(); epFixMissing();
     } else if (AF.sec === 'SCHEDULE' && !AF.genre) {                     // جدول الحلقات القادمة
       const html = await scheduleHtml(); if (tk !== AF.token) return;
       AF.done = true; box.innerHTML = `<div style="grid-column:1/-1">${html}</div>`; bindSchedule(box);
@@ -1339,16 +1465,23 @@ async function arMore(reset) {
       const all = await dubbedList(); if (tk !== AF.token) return;
       fresh = dedupe(all, AF.seen); AF.done = true;
       if (!fresh.length) box.innerHTML = '<p class="mute">لم نجد أي أنمي مدبلج في المصادر. يمكنك إضافة أنمي مدبلج في custom.json بإضافة <code>"dubbed": true</code> (يوجد مثال في custom.example.json).</p>';
+    } else if (ST_SECS[AF.sec] && !AF.genre) {                      // AniList تعطّل: نصنّف من المكتبة المحفوظة
+      const all = libByStatus(ST_SECS[AF.sec]), part = all.slice(AF.off, AF.off + 120);
+      AF.off += part.length; AF.done = AF.off >= all.length; fresh = dedupe(part, AF.seen);
+    } else if (AF.sec === 'ALL' && !AF.genre && window.WALIB && WALIB.count(AF.type) > 0) {   // المكتبة الكاملة (محلية وفورية)
+      const all = WALIB.get(AF.type), part = all.slice(AF.off, AF.off + 120);
+      AF.off += part.length; AF.done = AF.off >= all.length && WALIB.isDone(AF.type);
+      fresh = dedupe(part, AF.seen);
     } else if (AF.sec === 'SEASON' && !AF.genre) {                       // أنمي الموسم: من WitAnime فقط (صفحة واحدة)
       fresh = dedupe(await witSeason(), AF.seen); AF.done = true;
     } else {
       for (let tries = 0; tries < 4 && !fresh.length; tries++) {   // إذا الدفعة كلها مكررة نجيب اللي بعدها
         const wantWit = reset && tries === 0 && !AF.genre && AF.sec === 'latest' && AF.type === 'SERIES';
-        const [r, w, cu] = await Promise.all([window.api.ar.list(arQuery()), wantWit ? witLatest() : [], wantWit ? customList() : []]);
+        const [r, w, cu, a4] = await Promise.all([window.api.ar.list(arQuery()), wantWit ? witLatest() : [], wantWit ? customList() : [], wantWit ? a4uLatest() : []]);
         if (tk !== AF.token) return;
-        if (!r.length) { AF.done = true; fresh = dedupe([...cu, ...w], AF.seen); break; }
+        if (!r.length) { AF.done = true; fresh = dedupe([...cu, ...a4, ...w], AF.seen); break; }
         AF.off += r.length;
-        fresh = dedupe([...cu, ...r, ...w], AF.seen);
+        fresh = dedupe([...cu, ...a4, ...r, ...w], AF.seen);
       }
       if (!fresh.length) AF.done = true;
     }
@@ -1359,7 +1492,8 @@ async function arMore(reset) {
     box.insertAdjacentHTML('beforeend', fresh.map(anyCard).join(''));
     if (!AF.list.length && AF.sec !== 'CUSTOM' && !(['DUBBED', 'SCHEDULE', 'EPS'].includes(AF.sec) && !AF.genre)) box.innerHTML = '<p class="mute">لا توجد نتائج لهذا الفلتر.</p>';
     bindCards();
-    cnt.textContent = AF.sec === 'SCHEDULE' && !AF.genre ? 'الأسبوع القادم' : AF.sec === 'EPS' && !AF.genre ? epFilt(AF.list).length + ' حلقة' : AF.list.length + ' أنمي';
+    if (AF.sec === 'ALL' && !AF.genre && window.WALIB && WALIB.count(AF.type) > 0) cnt.textContent = AF.list.length + ' من ' + WALIB.count(AF.type) + ' أنمي' + (WALIB.running ? ' · جارٍ تحديث المكتبة…' : '');
+    else cnt.textContent = AF.sec === 'SCHEDULE' && !AF.genre ? 'الأسبوع القادم' : AF.sec === 'EPS' && !AF.genre ? epFilt(AF.list).length + ' حلقة' : AF.list.length + ' أنمي';
   } catch (e) { if (tk === AF.token) box.insertAdjacentHTML('beforeend', '<p class="mute">خطأ: ' + esc(errMsg(e)) + '</p>'); }
   finally {
     AF.busy = false;
@@ -1374,7 +1508,7 @@ async function arLoadCatalog(search) {
     try {
       const nq = normT(search);
       const [a, w, cu, sd, a4] = await Promise.all([window.api.ar.search(search).catch(() => []), witSearch(search), customList().then(l => l.filter(m => keysOf(m).some(k => k.includes(nq)))), window.api.dub.search(search).catch(() => []), a4uSearch(search)]);
-      const r = dedupe([...cu, ...sd, ...a4, ...a, ...w], newSeen());
+      const r = dedupe([...cu, ...a4, ...sd, ...w, ...a], newSeen());
       view.innerHTML = `<div class="sec"><h3>نتائج: ${esc(search)} (${r.length})</h3>` + (r.length ? arGrid(r) : '<p class="mute">لا توجد نتائج.</p>') + '</div>';
       bindCards();
     } catch (e) { say('خطأ: ' + errMsg(e)); }
@@ -1576,6 +1710,13 @@ async function openAr(id, wantEp, extra = {}) {
       eps = await window.api.ar.episodes(id).catch(() => []);
       witP = witMatch(m).then(w => (w ? witEpisodes(w.id) : [])).catch(() => []);   // نفس الأنمي في WitAnime (إن وُجد) كسيرفرات إضافية
       if (!eps.length) eps = (await witP).map(e => ({ num: e.num, wit: e.url }));
+      if (!eps.length) {   // Animeify + WitAnime بدون حلقات: نجرّب Anime4up
+        try {
+          const a4 = (await Promise.all([m.nameEn, m.name].filter(Boolean).map(q => a4uSearch(q).catch(() => [])))).flat();
+          const ks = keysOf(m), h4 = a4.find(x => keysOf(x).some(k => ks.includes(k))) || a4[0];
+          if (h4) { arCache.set(h4.id, h4); eps = (await a4uEpisodes(h4.id)).map(e => ({ num: e.num, a4u: e.url })); }
+        } catch {}
+      }
     }
     if (alP) { alInfo = await alP; const mg = mergeAl(eps, alInfo); eps = mg.eps; alAdded = mg.added; }
     const seen = new Set(store.get('seen', {})[m.id] || []);
@@ -1762,8 +1903,7 @@ function buildHomeHero() {
   const DUR = 8000;
   const box = document.createElement('div');
   box.className = 'hhero';
-  const VID = 'assets/itachi.mp4';
-  box.innerHTML = `<video class="hvid" src="${VID}" autoplay muted loop playsinline></video>` + items.map((m, i) => {
+  box.innerHTML = items.map((m, i) => {
     const gen = arOk(m.genres) ? String(m.genres).split(',').slice(0, 3).join(' · ') : '';
     return `<div class="hslide" data-i="${i}"><div class="hbg" style="background-image:url('${esc(m.poster)}')"></div>
       <div class="hbody">${heroTitle(m)}<p class="sub">${esc([m.nameEn && m.nameEn !== m.name ? m.nameEn : '', gen].filter(Boolean).join(' · '))}</p>
@@ -1934,8 +2074,8 @@ document.addEventListener('keydown', (e) => {
       fresh.forEach(x => epNew.add(epKey(x)));
       const box = $('#agrid');
       if (box && AF.sec === 'EPS' && !AF.genre) {            // القسم مفتوح: نحطو الجديد فوق ونعاودو الترتيب
-        AF.list = [...fresh, ...list.filter(x => !fresh.includes(x))];
-        box.innerHTML = epGridHtml(AF.list); bindCards(); bindEpStatus();
+        AF.list = list;                                       // list مرتبة أصلاً: الجديد فوق
+        box.innerHTML = epGridHtml(AF.list); bindCards(); bindEpStatus(); epFixMissing();
         const c = $('#acount'); if (c) c.textContent = AF.list.length + ' حلقة · آخر تحديث ' + new Date().toLocaleTimeString('ar-u-nu-latn', { hour: '2-digit', minute: '2-digit' });
       }
       if (fresh.length) toast('صدرت ' + fresh.length + ' حلقة جديدة في «آخر الحلقات»');
@@ -1944,15 +2084,15 @@ document.addEventListener('keydown', (e) => {
     finally { epBusy = false; }
   }
   window.epCheck = epCheck;
-  setTimeout(() => epCheck(false), 15000);
+  setTimeout(() => epCheck(false), 45000);
   setInterval(() => epCheck(false), EP_EVERY);
   setInterval(arRefresh, 5 * 60 * 1000);
   pushBg();
   if (window.api.onHidden) window.api.onHidden(() => document.querySelectorAll('video,audio').forEach(v => { try { v.pause(); } catch {} }));
-  setTimeout(watchNew, 20000); setInterval(watchNew, 10 * 60 * 1000);   // فحص الحلقات الجديدة للمفضلة وآخر ما شاهدته
+  setTimeout(watchNew, 60000); setInterval(watchNew, 10 * 60 * 1000);   // فحص الحلقات الجديدة للمفضلة وآخر ما شاهدته
   if (window.api.onNotifyOpen) window.api.onNotifyOpen((id) => openAr(id));
   // ضغط على إشعار (أو زر «شاهد»): نفتحو الحلقة مباشرة
-  const waLaunch = async () => { try { const l = await window.api.notifyLaunch(); if (l && l.id) openAr(l.id, l.ep ? String(l.ep) : undefined); } catch {} };
+  const waLaunch = async () => { try { const l = await window.api.notifyLaunch(); if (l && l.id && !String(l.id).startsWith('__')) openAr(l.id, l.ep ? String(l.ep) : undefined); } catch {} };
   document.addEventListener('visibilitychange', () => { if (!document.hidden) waLaunch(); });
   setTimeout(waLaunch, 1500);
   if (notifyOn) setTimeout(() => { try { window.api.notifyPerm(); } catch {} }, 4000);

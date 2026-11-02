@@ -16,7 +16,9 @@
     else if (dt > 3500) say('جارٍ جلب آخر الأنمي…');
     if (dt > MAX) hide();
   }, 150);
+  // الخطوط من الإنترنت ما تعطّل أول رسم: نفعّلها بعد تحميل الصفحة
   document.addEventListener('DOMContentLoaded', function () {
     setTimeout(function () { var l = document.getElementById('gfonts'); if (l) l.media = 'all'; }, 300);
   });
+  // رجوع من الخلفية بعد وقت طويل: لا نعرض الشاشة من جديد (تظهر فقط عند فتح التطبيق)
 })();
