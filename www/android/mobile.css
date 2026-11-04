@@ -1,0 +1,258 @@
+/* واجهة الموبايل — تُطبَّق فقط داخل تطبيق الأندرويد (html.android) */
+html.android{-webkit-tap-highlight-color:transparent;overscroll-behavior:none;touch-action:manipulation}
+html.android body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html.android input,html.android textarea{-webkit-user-select:text;user-select:text}
+html.android .wc{display:none!important}                     /* أزرار نافذة الديسكتوب */
+html.android ::-webkit-scrollbar{display:none}
+html.android header{padding-top:max(8px,env(safe-area-inset-top))}
+html.android .card,html.android button,html.android .chip{min-height:0}
+html.android button{touch-action:manipulation}
+
+@media (max-width:900px){
+  html.android header{padding-inline:14px;gap:10px}
+  html.android header .links{position:fixed;inset-inline:0;bottom:0;z-index:60;display:flex!important;justify-content:space-around;align-items:stretch;gap:0;
+    background:rgba(11,10,16,.97);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-top:1px solid var(--line);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+  html.android header .links button{flex:1;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    font-size:10.5px!important;font-weight:700;padding:6px 2px!important;border-radius:12px;color:var(--mute);background:none;border:0;min-width:0;white-space:nowrap}
+  html.android header .links button svg.i{width:22px;height:22px;margin:0!important}
+  html.android header .links button.on{color:#fff;background:rgba(108,92,231,.18)}
+  html.android header .links button.on svg.i{stroke:var(--a1)}
+  html.android main#view{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+  html.android body:has(#pl) header .links,html.android body:has(.cfov) header .links{display:none!important}
+  html.android .grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))!important;gap:12px!important}
+  html.android .brand span{display:none}
+  html.android #nParty{display:none}
+}
+@media (max-width:640px){
+  html.android header{height:auto;min-height:54px}
+  html.android .sb{flex:1 1 auto;max-width:none}
+  html.android .hero h2{font-size:26px}
+  html.android .toast{bottom:calc(86px + env(safe-area-inset-bottom))!important}
+}
+/* المشغّل: يملأ العرض ويحترم الشقّ (notch) */
+html.android #pl,html.android video{max-width:100%}
+html.android #pl .ptop{padding-top:max(8px,env(safe-area-inset-top))}
+@media (orientation:landscape) and (max-height:520px){
+  html.android header .links{display:none!important}
+  html.android main#view{padding-bottom:12px}
+}
+/* محرّر custom.json */
+.wa-editor{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px}
+.wa-ed-box{width:min(720px,100%);max-height:92vh;display:flex;flex-direction:column;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+.wa-ed-box textarea{flex:1;min-height:50vh;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.5 monospace;resize:none}
+.wa-ed-box div{display:flex;gap:10px;justify-content:flex-end}
+.wa-ed-box button{padding:9px 18px;border-radius:10px;border:0;font-weight:700}
+
+/* ===== ترتيب واجهة الموبايل (يطغى على القواعد السابقة) ===== */
+@media (max-width:900px){
+  html.android header{height:56px!important;padding:max(6px,env(safe-area-inset-top)) 14px 6px!important;gap:8px!important;
+    background:linear-gradient(#0b0a10f2,#0b0a10b3 70%,transparent)!important;box-sizing:content-box}
+  html.android .brand .logo{height:34px;width:auto}
+  /* البحث: زر أيقونة صغير بدل الصندوق الكبير */
+  /* خانة البحث في الشريط العلوي: بين اللوغو وأيقونة الإعلان */
+  html.android header .brand{order:0;flex:none}
+  html.android header .sb{order:1;flex:1 1 auto!important;width:auto!important;min-width:0!important;max-width:none!important;height:42px;padding:0 12px!important;gap:8px;border-radius:12px;justify-content:flex-start;cursor:pointer}
+  html.android header .sb input{display:block!important;flex:1;min-width:0;height:100%;padding:0!important;background:none!important;border:0!important;font-size:14px;font-weight:600;color:var(--text);pointer-events:none;text-overflow:ellipsis}
+  html.android header .sb input::placeholder{color:var(--mute);opacity:1}
+  html.android header .sb button{order:-1;flex:none;background:none!important;border:0!important;padding:0!important;width:22px;height:22px;display:flex;align-items:center;justify-content:center;color:var(--a1)}
+  html.android header .sp{display:none!important}
+  html.android header .sb~*,html.android header #acct,html.android header #nParty,html.android header #nUpdate,html.android header #nResume,html.android header #nAnn{order:2;flex:none}
+  /* المحتوى لا يختبئ تحت الشريط العلوي */
+  html.android .wrap.hh main#view>.sec:first-child{padding-top:calc(72px + env(safe-area-inset-top))}
+  html.android main#view{padding-inline:0!important;padding-top:calc(64px + env(safe-area-inset-top))}
+  html.android .wrap.hh main#view{padding-top:0!important}
+  html.android main#view>.sec{padding-inline:12px}
+  html.android .hero,html.android .hero:has(.chars .ch){height:clamp(300px,44vh,380px)!important}
+  html.android .hero h2{font-size:28px!important;line-height:1.2}
+  html.android .hero>div{bottom:56px!important;inset-inline-start:14px!important;max-width:calc(100% - 28px)!important}
+  html.android .hero .acts{margin-bottom:0}
+  /* شريط الفلاتر: صفوف أفقية قابلة للتمرير */
+  html.android .fbar{flex-direction:column;align-items:stretch;gap:10px;margin-bottom:16px}
+  html.android .fbar .chips{flex-wrap:nowrap;overflow-x:auto;gap:8px;padding-bottom:2px;scrollbar-width:none}
+  html.android .fbar .chip{flex:0 0 auto;white-space:nowrap;font-size:13px;height:38px;padding:0 14px}
+  html.android .fbar .gsel{align-self:flex-start;position:relative}
+  html.android .fbar #acount{font-size:12px}
+  html.android .gpanel{max-height:55vh;max-width:calc(100vw - 24px)}
+  /* بطاقات أنظف */
+  html.android .grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}
+  html.android .card p{font-size:12px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  html.android #amore,html.android #mmore{min-width:160px}
+}
+@media (max-width:330px){html.android .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+
+/* بانر الرئيسية (hhero) على الموبايل */
+@media (max-width:900px){
+  html.android .hhero{height:clamp(340px,50vh,430px)!important}
+  html.android .hbody{inset-inline:14px!important;max-width:none!important;bottom:50px!important}
+  html.android .hbody h2{font-size:26px!important;line-height:1.2}
+  html.android .hdesc{-webkit-line-clamp:2!important;font-size:13px;line-height:1.6;margin-bottom:12px}
+  html.android .hdots{bottom:20px!important;inset-inline-start:14px!important}
+  html.android .hhero+.sec{margin-top:-18px!important}
+}
+
+/* ===== آخر الحلقات + صفحة «الرئيسية» (صفوف أفقية + تصنيفات) ===== */
+.lathd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 16px;padding-top:14px}
+.lathd h3,.hsh h3{display:flex;align-items:center;gap:8px;margin:0;font-size:20px;font-weight:800}
+.lathd h3 svg.i,.hsh h3 svg.i{width:21px;height:21px;color:var(--a1)}
+.homep{padding-top:84px}
+.hsec{margin-bottom:26px}
+.hsh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.hsh h3{font-size:18px}
+.hall{background:none!important;border:0!important;color:var(--a1);font-size:13px;font-weight:700;padding:6px 4px;display:inline-flex;align-items:center;gap:5px;border-radius:8px}
+.hall svg.i{width:15px;height:15px}
+.hrow{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x proximity;scrollbar-width:none}
+.hrow::-webkit-scrollbar{display:none}
+.hrow .card{flex:0 0 clamp(110px,30vw,160px);scroll-snap-align:start}
+.hrow .mute{padding:28px 0;margin:0}
+.hgen{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+@media (max-width:900px){
+  html.android .homep{padding-top:calc(72px + env(safe-area-inset-top))}
+  html.android .hgen{grid-template-columns:repeat(2,minmax(0,1fr))}
+  html.android .hrow .card{flex-basis:clamp(104px,30vw,140px)}
+}
+
+/* بدون بنر: أول قسم ينزل تحت الشريط العلوي */
+.wrap.hh main>.sec:first-child{padding-top:84px}
+
+/* ===== زر الإعلان بجنب البحث ===== */
+.annb{position:relative;flex:none;width:var(--hh);height:var(--hh);padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r);background:#26262cd9;border:1px solid var(--line);color:#8d89a6;-webkit-app-region:no-drag}
+.annb:hover,.annb:focus-visible{border-color:var(--a1);color:var(--a1)}
+.annb svg.i{width:19px;height:19px}
+.annb .dot{position:absolute;top:3px;inset-inline-end:3px;width:9px;height:9px;border-radius:50%;background:#e11d48;border:2px solid #1c1c21;box-sizing:content-box}
+.annb .dot[hidden]{display:none}
+.annbox h3{margin:0 0 6px}
+.annbox .anntxt{margin:14px 0 0;font-size:15px;line-height:1.9;text-align:start;white-space:pre-wrap;word-break:break-word;max-height:55vh;overflow:auto}
+.annbox .annic{width:54px;height:54px;margin:0 auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#6c5ce72e;color:var(--a1)}
+.annbox .annic svg.i{width:26px;height:26px}
+@media (max-width:900px){html.android .annb{flex:0 0 42px;width:42px;height:42px}}
+
+/* ===== الرئيسية المخصصة للهاتف (.mh) — يولّدها android/home.js ===== */
+.mh{--hdr:calc(62px + max(6px,env(safe-area-inset-top,0px)));padding-top:var(--hdr);padding-bottom:16px}
+.mh svg.i{width:18px;height:18px;flex:none}
+
+/* شريط الأقسام الثابت */
+.mh-nav{position:sticky;top:var(--hdr);z-index:20;display:flex;gap:8px;overflow-x:auto;padding:10px 14px 12px;scrollbar-width:none;
+  background:linear-gradient(var(--bg) 80%,transparent);overscroll-behavior-x:contain}
+.mh-nav::-webkit-scrollbar{display:none}
+.mh-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 15px;border-radius:999px;background:var(--panel);
+  border:1px solid var(--line);color:var(--text);font-size:13px;font-weight:700;line-height:1;white-space:nowrap;transition:background .15s,border-color .15s}
+.mh-chip svg.i{color:var(--a1)}
+.mh-chip.on{background:var(--a1);border-color:transparent}
+.mh-chip.on svg.i{color:#fff}
+
+/* أقسام وصفوف */
+.mh-sec{margin:0 0 26px;scroll-margin-top:calc(var(--hdr) + 56px)}
+.mh-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px;margin-bottom:12px}
+.mh-hd h3{margin:0;display:flex;align-items:center;gap:8px;font-size:18px;font-weight:800}
+.mh-hd h3 svg.i{width:21px;height:21px;color:var(--a1)}
+.mh-all{display:inline-flex;align-items:center;gap:4px;height:36px;padding:0 4px 0 2px!important;background:none!important;border:0!important;color:var(--a1);font-size:13px;font-weight:700}
+.mh-all svg.i{width:15px;height:15px}
+.mh-rail{display:flex;gap:10px;overflow-x:auto;padding:2px 14px 6px;scroll-snap-type:x proximity;scroll-padding-inline:14px;scrollbar-width:none;overscroll-behavior-x:contain}
+.mh-rail::-webkit-scrollbar{display:none}
+
+/* بطاقة صغيرة */
+.mc{flex:0 0 118px;min-width:0;scroll-snap-align:start;cursor:pointer;display:flex;flex-direction:column;transition:transform .12s}
+.mc:active{transform:scale(.96)}
+.mc-p{position:relative;display:block;aspect-ratio:2/3;border-radius:12px;overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px #ffffff14}
+.mc-p img{display:block;width:100%;height:100%;object-fit:cover}
+.mc-ep,.mc-new,.mc-sc{position:absolute;font-style:normal;font-size:11px;font-weight:800;line-height:1;border-radius:8px;pointer-events:none}
+.mc-ep{top:6px;inset-inline-start:6px;padding:5px 8px;background:var(--a1);color:#fff;box-shadow:0 2px 8px #0008}
+.mc-new{top:6px;inset-inline-end:6px;padding:5px 8px;background:#e11d48;color:#fff}
+.mc-sc{bottom:6px;inset-inline-end:6px;display:inline-flex;align-items:center;gap:3px;padding:4px 7px;background:#0b0a10d9;color:#f5b301;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.mc-sc svg.i{width:11px;height:11px}
+.mc-t{margin-top:8px;font-size:12.5px;font-weight:600;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.9em}
+.mc-s{margin-top:2px;font-size:11.5px;color:var(--mute)}
+.mc-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(0deg,#0b0a10cc 0,transparent 55%)}
+.mc-play svg.i{width:34px;height:34px;padding:8px;border-radius:50%;background:#6c5ce7e6;color:#fff;fill:#fff;stroke:none;margin-top:30px}
+.mc-pg{position:absolute;inset-inline:0;bottom:0;height:4px;background:#ffffff38}
+.mc-pg i{display:block;height:100%;background:var(--a1)}
+.mc.sk{pointer-events:none}
+.mc.sk .mc-p,.mh-slide.sk{background:linear-gradient(100deg,var(--panel) 30%,var(--panel2) 50%,var(--panel) 70%);background-size:220% 100%;animation:mhsk 1.3s linear infinite}
+.mc.sk .mc-t{width:70%;height:10px;margin-top:10px;min-height:0;border-radius:6px;background:var(--panel)}
+@keyframes mhsk{from{background-position:120% 0}to{background-position:-120% 0}}
+
+/* «الأعلى تقييماً» بأرقام الترتيب */
+.mh-rank{gap:6px}
+.mr{flex:0 0 170px;display:flex;align-items:flex-end;scroll-snap-align:start}
+.mr .mc{flex:1 1 auto}
+.mr-n{flex:none;width:54px;padding-bottom:42px;text-align:center;direction:ltr;font:900 54px/1 "Noto Sans",sans-serif;letter-spacing:-4px;color:transparent;-webkit-text-stroke:2px #8a7cf5}
+
+/* المميّز */
+.mh-fs{margin:0 0 24px}
+.mh-feat{display:flex;gap:10px;overflow-x:auto;padding:2px 14px 10px;scroll-snap-type:x mandatory;scroll-padding-inline:14px;scrollbar-width:none;overscroll-behavior-x:contain}
+.mh-feat::-webkit-scrollbar{display:none}
+.mh-slide{position:relative;flex:0 0 calc(100% - 28px);height:202px;scroll-snap-align:start;scroll-snap-stop:always;display:flex;align-items:center;gap:14px;padding:14px;border-radius:20px;overflow:hidden;isolation:isolate;background:#0b0a10;cursor:pointer;box-shadow:0 0 0 1px #ffffff14}
+.mh-slide.sk{cursor:default;box-shadow:none}
+.mh-sbg{position:absolute;inset:-24px;width:calc(100% + 48px);height:calc(100% + 48px);object-fit:cover;filter:blur(24px) brightness(.5) saturate(1.35);z-index:-1}
+.mh-sp{height:100%;width:auto;aspect-ratio:2/3;object-fit:cover;border-radius:12px;flex:none;box-shadow:0 10px 28px #000b,0 0 0 1px #ffffff26}
+.mh-si{min-width:0;flex:1;height:100%;display:flex;flex-direction:column;justify-content:center;gap:7px}
+.mh-si h3{margin:0;font-size:17px;font-weight:900;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mh-sm{display:flex;align-items:center;gap:8px;font-size:12px;color:#e4e3f0}
+.mh-sm i{width:3px;height:3px;border-radius:50%;background:#ffffff80}
+.mh-sc{display:inline-flex;align-items:center;gap:3px;color:#f5b301;font-weight:800}
+.mh-sc svg.i{width:12px;height:12px}
+.mh-sg{display:flex;gap:6px;overflow:hidden;white-space:nowrap}
+.mh-sg span{padding:3px 9px;border-radius:999px;background:#ffffff1f;font-size:11px;font-weight:600}
+.mh-sd{margin:0;font-size:12px;line-height:1.6;color:#d8d6e8;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mh-go{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 16px;border-radius:999px;background:var(--a1);color:#fff;font-size:13px;font-weight:800;margin-top:2px}
+.mh-go svg.i{width:13px;height:13px;fill:#fff;stroke:none}
+.mh-dots{display:flex;justify-content:center;gap:6px}
+.mh-dots i{width:6px;height:6px;border-radius:6px;background:#ffffff40;transition:width .2s,background .2s}
+.mh-dots i.on{width:20px;background:var(--a1)}
+
+/* التصنيفات: ثلاثة صفوف تُسحب أفقياً */
+.mh-gen{display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,44px);grid-auto-columns:max-content;gap:8px;overflow-x:auto;padding:2px 14px 6px;scrollbar-width:none;overscroll-behavior-x:contain}
+.mh-gen::-webkit-scrollbar{display:none}
+.mh-g{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:12px;background:var(--panel);border:1px solid var(--line);font-size:13.5px;font-weight:700;white-space:nowrap}
+.mh-g svg.i{color:var(--a1)}
+.mh-g:active,.mh-chip:active{background:var(--panel2)}
+
+/* حالة الخطأ / الفراغ */
+.mh-msg{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:18px 2px;color:var(--mute);font-size:13px}
+.mh-retry{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;font-size:13px;font-weight:700}
+.mh-retry svg.i{color:var(--a1)}
+
+@media (max-width:340px){.mc{flex-basis:104px}.mr{flex-basis:152px}.mh-slide{height:190px}}
+@media (prefers-reduced-motion:reduce){.mc.sk .mc-p,.mh-slide.sk{animation:none}.mc,.mh-dots i{transition:none}}
+
+/* ===== مستطيل البحث في الرئيسية ===== */
+.mh-search{display:flex;align-items:center;gap:10px;width:calc(100% - 28px);height:48px;margin:6px 14px 2px;padding:0 16px;border-radius:14px;background:var(--panel);border:1px solid var(--line);color:var(--mute);font-size:14px;font-weight:600;text-align:start}
+.mh-search svg.i{width:20px;height:20px;color:var(--a1)}
+.mh-search:active{border-color:var(--a1);background:var(--panel2)}
+
+/* ===== البحث على الهاتف: شريط يتمدّد + نتائج بملء الشاشة ===== */
+.smtop{display:contents}
+#smc{display:none}
+html.android #sm{padding:0;align-items:stretch;justify-content:stretch;background:#0b0a10f5;animation:smfade .2s ease both}
+html.android .smbox{width:100%;height:100%;display:flex;flex-direction:column;padding-top:max(10px,env(safe-area-inset-top))}
+html.android .smtop{display:flex;align-items:center;gap:10px;padding:8px 12px 10px}
+html.android .smin{flex:1;min-width:0;height:50px;padding:0 14px;border-radius:14px;gap:10px;box-shadow:0 0 0 3px #6c5ce733;animation:smgrow .34s cubic-bezier(.2,.8,.2,1) both}
+html.android #sm[data-from="bar"] .smin{animation:smdrop .26s cubic-bezier(.2,.8,.2,1) both}
+html.android #smq{font-size:16px;-webkit-appearance:none;appearance:none}
+html.android #smq::-webkit-search-cancel-button,html.android #smq::-webkit-search-decoration{-webkit-appearance:none;display:none}
+html.android #smx{width:30px;height:30px}
+html.android #smc{display:inline-flex;flex:none;height:44px;padding:0 6px!important;background:none!important;border:0!important;color:var(--a1);font-size:15px;font-weight:700;animation:smfade .3s .12s ease both}
+html.android .smpanel{flex:1;min-height:0;display:flex;flex-direction:column;margin:0;background:none;border:0;border-radius:0;box-shadow:none}
+html.android .smres{flex:1;max-height:none;min-height:0;padding:2px 12px calc(14px + env(safe-area-inset-bottom));overscroll-behavior:contain}
+html.android .smfoot{display:none}
+html.android .smcnt{padding:6px 4px 8px;font-size:12.5px;color:var(--mute)}
+html.android .smrow{gap:14px;padding:9px 8px;border-radius:14px;margin-bottom:2px;min-height:64px}
+html.android .smrow.on{background:none;outline:0}
+html.android .smrow:active{background:#6c5ce72e}
+html.android .smrow img{width:54px;height:76px;border-radius:9px}
+html.android .smrow b{font-size:15px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+html.android .smrow small{display:block;margin-top:3px;font-size:12.5px}
+html.android .smempty{min-height:0;height:60%;padding:24px}
+html.android #sm[data-from="morph"] .smin{animation:none}
+html.android #sm.out{animation:smout .17s ease both;pointer-events:none}
+html.android .smrow{animation:smrow .34s cubic-bezier(.2,.8,.2,1) both}
+html.android .smpanel{animation:smrise .38s .06s cubic-bezier(.2,.8,.2,1) both}
+html.android .smin:focus-within{box-shadow:0 0 0 3px #6c5ce766,0 8px 30px #6c5ce733}
+@keyframes smout{to{opacity:0}}
+@keyframes smrow{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes smrise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes smfade{from{opacity:0}to{opacity:1}}
+@keyframes smgrow{from{clip-path:inset(0 86% 0 0 round 14px);opacity:.6}to{clip-path:inset(0 0 0 0 round 14px);opacity:1}}
+@keyframes smdrop{from{transform:translateY(-6px);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){html.android #sm,html.android .smin,html.android #smc,html.android .smrow,html.android .smpanel{animation:none}}

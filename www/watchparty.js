@@ -1,327 +1,279 @@
-/* مشاهدة مشتركة (Watch Party) — Android
-   - بلا سيرفر خاص: الغرفة كتخدم عبر MQTT فوق WebSocket (brokers عمومية مجانية)، والـ client مكتوب هنا بلا مكتبات.
-   - الكود ديال الغرفة = رقم السيرفر (0-2) + 6 حروف عشوائية.
-   - كلشي كيتزامن: تشغيل / إيقاف / تقديم / تأخير + نفس الفيديو (المضيف كيبعث رابط الفيديو). المضيف كيبعث نبضة كل 4 ثواني لتصحيح الفرق. */
-(function () {
-  const $ = (s, r) => (r || document).querySelector(s);
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const say = (t) => { try { typeof toast === 'function' ? toast(t) : alert(t); } catch (e) {} };
-
-  const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
+/* ===== مشاهدة مشتركة (Watch Party) =====
+   - أيقونة فـ المشغّل → كود → تصيفطو لصديقك → كيدخلو فـ أيقونة الهيدر → نفس الفيديو + نفس الوقت.
+   - النقل عبر MQTT على WebSocket (وسيط عمومي مجاني، بلا سيرفر ديالك). الكود كيحدد الوسيط + الغرفة.
+   - ملاحظة: كيخدم غير مع المصادر المباشرة (video / HLS) ماشي iframe. */
+(() => {
+  const BROKERS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt', 'wss://test.mosquitto.org:8081/'];
+  const PREFIX = 'ABC';                                  // حرف الكود الأول = رقم الوسيط
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const ICON = '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.2c2.7.2 4.5 2.4 4.5 5.3"/></svg>';
-  window.waWpIcon = ICON;
+  const ICON = svg('<circle cx="8.5" cy="8" r="3"/><path d="M3 19v-.8a5.5 5.5 0 0 1 11 0v.8"/><circle cx="17" cy="9" r="2.5"/><path d="M16.2 13.7a4.6 4.6 0 0 1 5.3 4.5v.8"/>');
+  const rid = () => Math.random().toString(36).slice(2, 10);
+  const E = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  /* ================= MQTT 3.1.1 صغير (QoS 0) ================= */
-  function MQ(url, onMsg) {
-    const enc = new TextEncoder(), dec = new TextDecoder();
-    const str = (s) => { const b = enc.encode(s); return [b.length >> 8, b.length & 255, ...b]; };
-    const rl = (n) => { const o = []; do { let d = n % 128; n = Math.floor(n / 128); if (n > 0) d |= 128; o.push(d); } while (n > 0); return o; };
-    let ws, buf = new Uint8Array(0), ping = null, to = null, pid = 1, fin = null;
-    const me = { onclose: null };
-    const send = (a) => { if (ws && ws.readyState === 1) ws.send(new Uint8Array(a)); };
+  // ---------- عميل MQTT 3.1.1 صغير (QoS 0) ----------
+  const enc = new TextEncoder(), dec = new TextDecoder();
+  const cat = (...a) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let p = 0; a.forEach((x) => { o.set(x, p); p += x.length; }); return o; };
+  const mstr = (s) => { const b = enc.encode(s); return cat(new Uint8Array([b.length >> 8, b.length & 255]), b); };
+  const rlen = (n) => { const o = []; do { let d = n % 128; n = Math.floor(n / 128); if (n > 0) d |= 128; o.push(d); } while (n > 0); return new Uint8Array(o); };
+  const pkt = (first, body) => cat(new Uint8Array([first]), rlen(body.length), body);
 
-    function parse() {
-      for (;;) {
-        if (buf.length < 2) return;
-        let mult = 1, len = 0, i = 1, b;
-        do { if (i >= buf.length) return; b = buf[i++]; len += (b & 127) * mult; mult *= 128; } while (b & 128);
-        if (buf.length < i + len) return;
-        const type = buf[0] >> 4, flags = buf[0] & 15, body = buf.slice(i, i + len);
-        buf = buf.slice(i + len);
-        if (type === 2) { fin && (body[1] === 0 ? fin() : fin(new Error('refused'))); }
-        else if (type === 3) {
-          const tl = (body[0] << 8) | body[1], topic = dec.decode(body.subarray(2, 2 + tl));
-          let off = 2 + tl; if ((flags >> 1) & 3) off += 2;
-          try { onMsg(topic, dec.decode(body.subarray(off))); } catch (e) {}
-        }
-      }
-    }
-
-    me.open = () => new Promise((res, rej) => {
-      let done = false;
-      fin = (e) => { if (done) return; done = true; clearTimeout(to); e ? rej(e) : res(); };
-      try { ws = new WebSocket(url, 'mqtt'); } catch (e) { return fin(e); }
+  function mqttConnect(url, onMsg, onClose) {
+    return new Promise((res, rej) => {
+      let ws, buf = new Uint8Array(0), ok = false, ping = 0, dead = false;
+      try { ws = new WebSocket(url, 'mqtt'); } catch (e) { return rej(e); }
       ws.binaryType = 'arraybuffer';
-      to = setTimeout(() => { fin(new Error('timeout')); try { ws.close(); } catch (e) {} }, 7000);
-      ws.onopen = () => {
-        const body = [0, 4, 77, 81, 84, 84, 4, 2, 0, 45, ...str('wa' + Math.random().toString(16).slice(2, 10))];
-        send([0x10, ...rl(body.length), ...body]);
+      const to = setTimeout(() => { if (!ok) { try { ws.close(); } catch {} rej(new Error('timeout')); } }, 8000);
+      const send = (u) => { if (ws.readyState === 1) ws.send(u); };
+      const api = {
+        sub: (t) => send(pkt(0x82, cat(new Uint8Array([0, 1]), mstr(t), new Uint8Array([0])))),
+        pub: (t, o) => send(pkt(0x30, cat(mstr(t), enc.encode(JSON.stringify(o))))),
+        close: () => { dead = true; clearInterval(ping); try { send(new Uint8Array([0xe0, 0])); ws.close(); } catch {} }
       };
+      ws.onopen = () => send(pkt(0x10, cat(mstr('MQTT'), new Uint8Array([4, 2, 0, 30]), mstr('wa' + rid() + rid()))));
       ws.onmessage = (e) => {
-        const nb = new Uint8Array(e.data), m = new Uint8Array(buf.length + nb.length);
-        m.set(buf); m.set(nb, buf.length); buf = m; parse();
+        buf = cat(buf, new Uint8Array(e.data));
+        while (buf.length >= 2) {
+          let mul = 1, len = 0, i = 1, b;
+          do { if (i >= buf.length) return; b = buf[i++]; len += (b & 127) * mul; mul *= 128; } while (b & 128);
+          if (buf.length < i + len) return;
+          const first = buf[0], type = first >> 4, body = buf.slice(i, i + len);
+          buf = buf.slice(i + len);
+          if (type === 2) {                                   // CONNACK
+            if (body[1] === 0) { ok = true; clearTimeout(to); ping = setInterval(() => send(new Uint8Array([0xc0, 0])), 20000); res(api); }
+            else { clearTimeout(to); rej(new Error('refused')); }
+          } else if (type === 3) {                            // PUBLISH
+            const tl = (body[0] << 8) | body[1];
+            let p = 2 + tl; if ((first >> 1) & 3) p += 2;
+            try { onMsg(dec.decode(body.subarray(2, 2 + tl)), JSON.parse(dec.decode(body.subarray(p)))); } catch {}
+          }
+        }
       };
-      ws.onerror = () => fin(new Error('ws'));
-      ws.onclose = () => { clearInterval(ping); fin(new Error('closed')); me.onclose && me.onclose(); };
-      clearInterval(ping); ping = setInterval(() => send([0xC0, 0]), 20000);
+      ws.onerror = () => {};
+      ws.onclose = () => { clearTimeout(to); clearInterval(ping); if (!ok) rej(new Error('closed')); else if (!dead) onClose(); };
     });
-    me.sub = (topic) => { const body = [pid >> 8, pid & 255, ...str(topic), 0]; pid = (pid % 60000) + 1; send([0x82, ...rl(body.length), ...body]); };
-    me.pub = (topic, payload, retain) => { const body = [...str(topic), ...enc.encode(payload)]; send([0x30 | (retain ? 1 : 0), ...rl(body.length), ...body]); };
-    me.close = () => { me.onclose = null; clearInterval(ping); try { send([0xE0, 0]); ws.close(); } catch (e) {} };
-    return me;
   }
 
-  /* ================= حالة الغرفة ================= */
-  const P = {
-    on: false, host: false, code: '', idx: 0, id: Math.random().toString(16).slice(2, 10),
-    mq: null, peers: new Map(), sup: 0, applyingLoad: false, url: '', title: '', hls: false,
-    pending: null, gotState: false, retry: 0, leaving: false, hbT: null, seekT: null, prT: null
-  };
-  const base = () => 'wayanime/wp/' + P.code;
-  const pub = (m, retain) => { if (!P.mq) return; m.i = P.id; try { P.mq.pub(base() + (retain ? '/s' : '/e'), JSON.stringify(m), retain); } catch (e) {} };
-  const vid = () => { const pl = $('#pl'); return pl && $('video', pl); };
-  const members = () => { const now = Date.now(); let n = 1; P.peers.forEach((t) => { if (now - t < 16000) n++; }); return n; };
-  const fmtCode = (c) => c.slice(0, 1) + '-' + c.slice(1);
+  // ---------- الجلسة ----------
+  let S = null;                                              // الجلسة الحالية
+  let myName = 'PC';
+  window.api.wp.name().then((n) => { myName = n || 'PC'; }).catch(() => {});
+  const vid = () => document.querySelector('#pl video');
 
-  function seek(v, t) { if (isFinite(t) && Math.abs((v.currentTime || 0) - t) > 0.7) { try { v.currentTime = Math.max(0, t); } catch (e) {} } }
-  function playV(v) { const r = v.play(); if (r && r.catch) r.catch(() => say('اضغط ▶ لبدء الفيديو (منع الهاتف التشغيل التلقائي)')); }
-
-  /* ----- استقبال ----- */
-  function onMessage(topic, txt) {
-    if (!txt) return;
-    let m; try { m = JSON.parse(txt); } catch (e) { return; }
-    if (!m || m.i === P.id) return;
-    if (m.a === 'pr' || m.a === 'hb' || m.a === 'hi') P.peers.set(m.i, Date.now());
-    if (m.a === 'bye') { P.peers.delete(m.i); return; }
-    if (topic.slice(-2) === '/s') {          // حالة محفوظة (retained): غير أول مرة، للي دخل متأخر
-      if (P.gotState || P.host) return;
-      P.gotState = true;
-      if (m.url) onLoad(m);
-      return;
-    }
-    if (m.a === 'hi') { if (P.host && vid()) pubState(); return; }
-    if (m.a === 'load') return onLoad(m);
-    const v = vid(); if (!v) return;
-    if (m.a === 'play' || m.a === 'pause' || m.a === 'seek' || m.a === 'hb') {
-      if (m.a === 'hb' && P.host) return;
-      if (Date.now() < P.sup && m.a === 'hb') return;
-      if (v.readyState < 1) { P.pending = { t: m.t, p: m.a === 'play' || (m.a === 'hb' && m.p) }; return; }
-      P.sup = Date.now() + 900;
-      if (m.a === 'play') { seek(v, m.t); playV(v); }
-      else if (m.a === 'pause') { v.pause(); seek(v, m.t); }
-      else if (m.a === 'seek') seek(v, m.t);
-      else {   // hb
-        if (Math.abs((v.currentTime || 0) - m.t) > 2.5) seek(v, m.t);
-        if (m.p && v.paused) playV(v); else if (!m.p && !v.paused) v.pause();
-      }
-    }
-  }
-
-  function onLoad(m) {
-    if (!m.url) return;
-    if (m.url === P.url && vid()) { P.pending = { t: m.t || 0, p: !!m.p }; applyPending(); return; }
-    P.pending = { t: m.t || 0, p: m.p !== false };
-    P.applyingLoad = true;
-    try { window.attach(m.url, { title: m.title || 'مشاهدة مشتركة', hls: !!m.hls }); } finally { P.applyingLoad = false; }
-    say('الغرفة: بدأ الفيديو ✔');
-  }
-
-  function applyPending() {
-    const v = vid(); if (!v || !P.pending) return;
-    const go = () => {
-      const pd = P.pending; if (!pd) return; P.pending = null;
-      P.sup = Date.now() + 1500;
-      seek(v, pd.t);
-      pd.p ? playV(v) : v.pause();
-    };
-    v.readyState >= 1 ? go() : v.addEventListener('loadedmetadata', go, { once: true });
-  }
-
-  /* ----- إرسال ----- */
-  function pubState() {
-    const v = vid();
-    pub({ a: 'load', url: P.url, title: P.title, hls: P.hls, t: v ? v.currentTime : 0, p: v ? !v.paused : false }, true);
-  }
-  const emit = (a) => {
-    if (!P.on) return;
-    const v = vid(); if (!v || Date.now() < P.sup || v.readyState < 1) return;
-    pub({ a, t: v.currentTime, p: !v.paused });
-  };
-
-  function bindVideo(pl) {
-    const v = $('video', pl); if (!v || v._wp) return; v._wp = true;
-    P.sup = Date.now() + 3500;   // ما نبعثوش شي فـ أول ثواني التحميل (autoplay)
-    v.addEventListener('play', () => emit('play'));
-    v.addEventListener('pause', () => { if (!v.ended) emit('pause'); });
-    v.addEventListener('seeked', () => { clearTimeout(P.seekT); P.seekT = setTimeout(() => emit('seek'), 250); });
-    if (P.pending) applyPending();
-    clearInterval(P.hbT);
-    let n = 0;
-    P.hbT = setInterval(() => {
-      if (!P.on || !pl.isConnected) { clearInterval(P.hbT); return; }
-      n++;
-      if (P.host && v.readyState >= 1) { pub({ a: 'hb', t: v.currentTime, p: !v.paused }); if (n % 3 === 0) pubState(); }
-    }, 4000);
-  }
-
-  /* ----- ربط المشغّل: نغلفو attach باش نعرفو الرابط ونزيدو الزر ----- */
-  const origAttach = window.attach;
-  if (typeof origAttach === 'function') {
-    window.attach = function (url, s) {
-      const r = origAttach.apply(this, arguments);
-      try { onAttach(url, s || {}); } catch (e) {}
-      return r;
-    };
-  }
-  function onAttach(url, s) {
-    const pl = $('#pl'); if (!pl) return;
-    P.url = url; P.hls = !!s.hls;
-    P.title = ((s.title || ($('.hero h2') || $('.sec h2') || {}).textContent || '') + ' ' + (s.title ? '' : (($('.eps button.on') || {}).textContent || ''))).trim();
-    const top = $('.ptop', pl);
-    if (top && !$('#pwp', pl)) {
-      const b = document.createElement('button');
-      b.id = 'pwp'; b.type = 'button'; b.title = 'مشاهدة مشتركة'; b.innerHTML = ICON;
-      b.onclick = (e) => { e.stopPropagation(); openPanel(); };
-      top.insertBefore(b, $('#pfs', pl) || top.lastElementChild);
-    }
-    const bt = $('#pwp', pl); if (bt) bt.classList.toggle('on', P.on);
-    if (P.on) {
-      bindVideo(pl);
-      if (!P.applyingLoad) pubState();   // فتحنا فيديو جديد وحنا فـ غرفة: نعلمو الباقي
-    }
-  }
-
-  /* ================= الاتصال ================= */
-  async function connect(idx) {
-    const mq = MQ(BROKERS[idx], onMessage);
-    await mq.open();
-    mq.sub(base() + '/e'); mq.sub(base() + '/s');
-    mq.onclose = () => reconnect();
-    P.mq = mq; P.idx = idx;
-  }
-  async function reconnect() {
-    if (P.leaving || !P.on) return;
-    if (++P.retry > 6) { say('انقطع الاتصال بالغرفة'); leave(true); return; }
-    await new Promise((r) => setTimeout(r, 2500));
-    if (P.leaving || !P.on) return;
-    try { await connect(P.idx); P.retry = 0; pub({ a: 'hi' }); } catch (e) { reconnect(); }
-  }
-  function newCode(idx) {
-    const a = new Uint8Array(6); crypto.getRandomValues(a);
-    return String(idx) + [...a].map((x) => ALPHA[x % ALPHA.length]).join('');
-  }
-  function afterJoin() {
-    P.on = true; P.leaving = false; P.retry = 0; P.peers.clear(); P.gotState = false;
-    clearInterval(P.prT); P.prT = setInterval(() => { P.on ? pub({ a: 'pr' }) : clearInterval(P.prT); }, 6000);   // حضور: باش العدّاد ديال المتصلين يخدم
-    const pl = $('#pl'); if (pl) { bindVideo(pl); const b = $('#pwp', pl); b && b.classList.add('on'); }
-    refresh();
-  }
-
-  async function create() {
-    setBusy('جارٍ إنشاء الغرفة…');
-    for (let i = 0; i < BROKERS.length; i++) {
-      P.code = newCode(i);
+  async function openChannel(code, role) {
+    const idx = Math.max(0, PREFIX.indexOf(code[0])), topic = 'wayanime/wp/' + code;
+    const order = role === 'host' ? BROKERS.map((_, i) => i) : [idx];
+    let lastErr;
+    for (const i of order) {
       try {
-        await connect(i);
-        P.host = true; afterJoin();
-        if (P.url && vid()) pubState();
-        pub({ a: 'hi' });
-        return;
-      } catch (e) { try { P.mq && P.mq.close(); } catch (x) {} P.mq = null; }
+        const sess = { id: rid(), role, code: PREFIX[i] + code.slice(1), peer: null, ign: { play: 0, pause: 0, seeked: 0 }, hadPlayer: role === 'host', url: '' };
+        const c = await mqttConnect(BROKERS[i], (t, m) => onMsg(sess, m), () => { if (S === sess) { toast('انقطع الاتصال بالجلسة'); leave(false); } });
+        c.sub(role === 'host' ? 'wayanime/wp/' + sess.code : 'wayanime/wp/' + PREFIX[i] + code.slice(1));
+        sess.c = c; sess.topic = 'wayanime/wp/' + sess.code;
+        return sess;
+      } catch (e) { lastErr = e; }
     }
-    P.code = '';
-    setBusy(''); say('تعذّر الاتصال بسيرفر الغرفة. تأكد من الإنترنت وحاول مجددًا.');
+    throw lastErr || new Error('fail');
+  }
+  const tx = (o) => { if (S && S.c) S.c.pub(S.topic, { ...o, id: S.id }); };
+
+  async function host() {
+    const v = vid(); if (!v) return toast('افتح فيديو أولاً (مصدر مباشر)');
+    if (S) return panel();
+    const rnd = Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => ALPHA[b % ALPHA.length]).join('');
+    try {
+      const s = await openChannel('A' + rnd, 'host');   // أول وسيط يخدم يتختار، والحرف الأول كيتحدّث
+      S = s; S.url = currentUrl(); hookVideo(); drawChip(); panel();
+    } catch { toast('تعذّر الاتصال بوسيط الجلسة، تأكد من الإنترنت'); }
   }
   async function join(raw) {
     const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!/^[0-9][A-Z0-9]{6}$/.test(code) || +code[0] >= BROKERS.length) { say('الكود غير صحيح (7 أحرف/أرقام)'); return; }
-    setBusy('جارٍ الدخول للغرفة…');
-    P.code = code;
+    if (code.length !== 6 || PREFIX.indexOf(code[0]) < 0) return toast('الكود غير صحيح');
+    if (S) leave(false);
     try {
-      await connect(+code[0]);
-      P.host = false; afterJoin();
-      pub({ a: 'hi' });
-      say('دخلت الغرفة ✔ — في انتظار الفيديو من المضيف');
-    } catch (e) { P.code = ''; P.mq = null; setBusy(''); say('تعذّر الاتصال بالغرفة. تأكد من الكود والإنترنت.'); }
+      const s = await openChannel(code, 'guest');
+      S = s; S.hadPlayer = !!vid(); if (vid()) hookVideo();
+      tx({ t: 'hello', name: myName });
+      panel(); drawChip();
+      toast('تم الدخول، بانتظار أن يبدأ صديقك الفيديو…');
+    } catch { toast('تعذّر الدخول للجلسة. تأكد من الكود والإنترنت'); }
   }
-  function leave(silent) {
-    P.leaving = true;
-    clearInterval(P.hbT); clearInterval(P.prT); clearTimeout(P.seekT);
-    try { if (P.mq) { pub({ a: 'bye' }); if (P.host) P.mq.pub(base() + '/s', '', true); setTimeout(() => P.mq && P.mq.close(), 150); } } catch (e) {}
-    P.on = false; P.host = false; P.code = ''; P.peers.clear(); P.pending = null;
-    const b = $('#pwp'); b && b.classList.remove('on');
-    refresh();
-    silent || say('غادرت الغرفة');
-    setTimeout(() => { P.mq = null; }, 400);
-  }
-
-  /* ================= الواجهة ================= */
-  const css = document.createElement('style');
-  css.textContent =
-    '#pwp{position:relative}#pwp svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}' +
-    '#pwp.on{color:#4ade80}#pwp.on::after{content:"";position:absolute;top:1px;inset-inline-end:1px;width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80}' +
-    '#wpOv{position:fixed;inset:0;z-index:10000;background:#000a;display:flex;align-items:center;justify-content:center;padding:18px;direction:rtl;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}' +
-    '#wpBox{width:min(380px,100%);max-height:90vh;overflow:auto;background:#17132d;border:1px solid #7b4dff66;border-radius:20px;padding:20px 18px;color:#fff;box-shadow:0 20px 60px #000c;font-size:14px}' +
-    '#wpBox h3{margin:0 0 4px;font-size:19px;font-weight:900;display:flex;align-items:center;gap:8px}#wpBox h3 svg{width:22px;height:22px;fill:none;stroke:#a78bfa;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}' +
-    '#wpBox p{margin:6px 0 14px;color:#a09fb5;line-height:1.7;font-size:12.5px}' +
-    '#wpBox .wb{display:block;width:100%;height:46px;border:0;border-radius:14px;background:#7b4dff;color:#fff;font-weight:800;font-size:15px;margin-top:8px}' +
-    '#wpBox .wb.g{background:#ffffff14;border:1px solid #ffffff22}#wpBox .wb.r{background:#ef444422;border:1px solid #ef444477;color:#fca5a5}' +
-    '#wpBox .wb[disabled]{opacity:.5}' +
-    '#wpBox .or{text-align:center;color:#a09fb5;margin:14px 0 6px;font-size:12px}' +
-    '#wpIn{width:100%;height:46px;border-radius:14px;background:#0e0b20;border:1px solid #7b4dff55;color:#fff;text-align:center;letter-spacing:6px;font-size:20px;font-weight:800;text-transform:uppercase;direction:ltr;padding:0}' +
-    '#wpBox .code{direction:ltr;text-align:center;font-size:32px;font-weight:900;letter-spacing:6px;background:#0e0b20;border:1px dashed #7b4dff99;border-radius:16px;padding:14px 6px;margin:12px 0 6px;user-select:all;-webkit-user-select:all}' +
-    '#wpBox .row{display:flex;gap:8px}#wpBox .row .wb{flex:1}' +
-    '#wpBox .st{display:flex;justify-content:space-between;color:#cfc9ff;margin:10px 2px 2px;font-weight:700}#wpBox .st i{font-style:normal;color:#4ade80}';
-  document.head.appendChild(css);
-
-  let busyMsg = '';
-  function setBusy(t) { busyMsg = t; refresh(); }
-
-  function openPanel() {
-    if ($('#wpOv')) return;
-    const ov = document.createElement('div'); ov.id = 'wpOv';
-    ov.innerHTML = '<div id="wpBox"></div>';
-    ov.addEventListener('click', (e) => { if (e.target === ov) closePanel(); });
-    document.body.appendChild(ov);
-    refresh();
-    ov._t = setInterval(() => { if (!$('#wpOv')) clearInterval(ov._t); else if (P.on) { const m = $('#wpMem'); if (m) m.textContent = members(); } }, 2000);
-  }
-  function closePanel() { const ov = $('#wpOv'); if (ov) { clearInterval(ov._t); ov.remove(); } busyMsg = ''; }
-  window.openWatchParty = openPanel;
-
-  function copy(txt) {
-    const done = () => say('تم نسخ الكود ✔');
-    try { if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(txt).then(done, fb); } catch (e) {}
-    fb();
-    function fb() {
-      const ta = document.createElement('textarea'); ta.value = txt; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta);
-      ta.select(); try { document.execCommand('copy'); done(); } catch (e) { say('انسخ الكود يدويًا: ' + txt); } ta.remove();
-    }
+  function leave(notify) {
+    const s = S; if (!s) return;
+    if (notify !== false) { try { tx({ t: 'bye' }); } catch {} }
+    S = null; setTimeout(() => s.c && s.c.close(), 200);
+    document.querySelectorAll('.wpchip,#wp').forEach((n) => n.remove());
+    if (s.fs) window.api.wp.fs(false).catch(() => {});
+    if (notify !== 'quiet') toast('خرجت من الجلسة');
   }
 
-  function refresh() {
-    const box = $('#wpBox'); if (!box) return;
-    if (busyMsg) { box.innerHTML = '<h3>' + ICON + 'مشاهدة مشتركة</h3><p>' + esc(busyMsg) + '</p>'; return; }
-    if (!P.on) {
-      box.innerHTML =
-        '<h3>' + ICON + 'مشاهدة مشتركة</h3>' +
-        '<p>شاهدوا الحلقة نفسها في الوقت نفسه: التشغيل والإيقاف والتقديم تتزامن عند الجميع.</p>' +
-        '<button class="wb" id="wpNew">إنشاء غرفة جديدة</button>' +
-        '<div class="or">— أو —</div>' +
-        '<input id="wpIn" maxlength="9" placeholder="كود الغرفة" autocomplete="off" autocapitalize="characters">' +
-        '<button class="wb g" id="wpJoin">دخول بالكود</button>' +
-        '<button class="wb g" id="wpX" style="margin-top:14px">إغلاق</button>';
-      $('#wpNew').onclick = create;
-      $('#wpJoin').onclick = () => join($('#wpIn').value);
-      $('#wpIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(e.target.value); });
-      $('#wpX').onclick = closePanel;
-    } else {
-      box.innerHTML =
-        '<h3>' + ICON + 'أنت في الغرفة</h3>' +
-        '<p>' + (P.host ? 'أنت المضيف: أعطِ هذا الكود لأصدقائك، وأي فيديو تفتحه سيُفتح عندهم.' : 'أنت ضيف: سيُفتح عندك الفيديو الذي يشغّله المضيف.') + '</p>' +
-        '<div class="code">' + esc(fmtCode(P.code)) + '</div>' +
-        '<div class="st"><span>المتصلون</span><i id="wpMem">' + members() + '</i></div>' +
-        '<div class="row"><button class="wb g" id="wpCp">نسخ الكود</button><button class="wb g" id="wpSh">مشاركة</button></div>' +
-        '<button class="wb r" id="wpLv">مغادرة الغرفة</button>' +
-        '<button class="wb g" id="wpX" style="margin-top:8px">إغلاق</button>';
-      $('#wpCp').onclick = () => copy(P.code);
-      $('#wpSh').onclick = () => {
-        const txt = 'تعال نشاهد الأنمي معًا في WayAnime 🎬 — ادخل إلى «مشاهدة مشتركة» وأدخل الكود: ' + P.code;
-        if (navigator.share) navigator.share({ text: txt }).catch(() => {}); else copy(txt);
+  // ---------- المزامنة ----------
+  const currentUrl = () => { const v = vid(); return (v && (v.currentSrc || v.src)) || (document.querySelector('#pl') || {})._wpUrl || ''; };
+  const ig = (n) => { S.ign[n]++; const s = S; setTimeout(() => { if (S === s) s.ign[n] = Math.max(0, s.ign[n] - 1); }, 3000); };
+  function remote(name, fn) { if (!S) return; ig(name); fn(); }
+  function hookVideo() {
+    const v = vid(); if (!v || !S || v._wp === S) return; v._wp = S;
+    const s = S, g = (n, f) => v.addEventListener(n, () => { if (S !== s || s.syncing) return; if (s.ign[n === 'seeked' ? 'seeked' : n] > 0) { s.ign[n === 'seeked' ? 'seeked' : n]--; return; } f(); });
+    g('play', () => tx({ t: 'play', at: v.currentTime }));
+    g('pause', () => tx({ t: 'pause', at: v.currentTime }));
+    g('seeked', () => tx({ t: 'seek', at: v.currentTime, paused: v.paused }));
+    if (s.role === 'host') { clearInterval(s.tick); s.tick = setInterval(() => { if (S !== s) return clearInterval(s.tick); const x = vid(); if (x) tx({ t: 'tick', at: x.currentTime, paused: x.paused }); }, 4000); }
+  }
+  function sendOpen() {
+    const v = vid(); if (!v || !S || S.role !== 'host') return;
+    const title = ((document.querySelector('#pl .ptop b') || {}).textContent || '').trim();
+    tx({ t: 'open', url: currentUrl(), title, at: v.currentTime, paused: v.paused });
+  }
+  function applyState(m) {
+    const v = vid(); if (!v) return;
+    if (isFinite(m.at) && Math.abs(v.currentTime - m.at) > (m.t === 'tick' ? 2 : 0.6)) remote('seeked', () => { v.currentTime = m.at; });
+    if (m.paused === true && !v.paused) remote('pause', () => v.pause());
+    if (m.paused === false && v.paused) remote('play', () => v.play().catch(() => {}));
+  }
+  function openRemote(m) {
+    m._rx = m._rx || Date.now();
+    if (!/^https?:\/\//i.test(m.url || '')) return;
+    S.opening = true;
+    const same = vid() && S.url === m.url;
+    S.url = m.url;
+    if (!same) {
+      const s = S; s.syncing = true;                       // ما نصيفطو حتى حاجة للمضيف حتى نتزامنو (باش ما يرجعش الفيديو للصفر)
+      attach(m.url, {});
+      const v = vid(); if (!v) { s.opening = false; s.syncing = false; return; }
+      const pl = document.querySelector('#pl'); pl._wpUrl = m.url;
+      const b = pl.querySelector('.ptop b'); if (b && m.title) b.textContent = m.title;
+      v.pause(); const wasMuted = v.muted; v.muted = true;  // بلا autoplay من الصفر ولا صوت أثناء التحضير
+      const ov = document.createElement('div'); ov.className = 'wpload';
+      ov.innerHTML = '<div class="wpspin"></div><p>' + E(m.title || 'مشاهدة مشتركة') + '</p><small>جارٍ تحضير الفيديو مع ' + E(s.peer ? s.peer.name : 'صديقك') + '…</small>';
+      (pl.querySelector('.pbox') || pl).appendChild(ov);
+      let done = false;
+      const finish = () => {
+        if (done) return; done = true; clearTimeout(guard);
+        const t = (m.paused === false ? m.at + (Date.now() - m._rx) / 1000 : m.at) || 0;   // نعوضو وقت التحميل
+        if (isFinite(t) && Math.abs(v.currentTime - t) > 0.6) { ig('seeked'); try { v.currentTime = t; } catch {} }
+        if (m.paused === false) { ig('play'); v.play().catch(() => {}); } else if (!v.paused) { ig('pause'); v.pause(); }
+        v.muted = wasMuted;
+        setTimeout(() => { s.syncing = false; }, 600);
+        ov.classList.add('out'); setTimeout(() => ov.remove(), 400);
+        s.fs = true; window.api.wp.fs(true).catch(() => {});   // ملء الشاشة غير من بعد ما الفيديو يجهز
       };
-      $('#wpLv').onclick = () => { leave(); };
-      $('#wpX').onclick = closePanel;
+      v.addEventListener('play', () => { if (!done) v.pause(); });   // إلا الـ HLS بدا autoplay وحنا مازال كنحضرو
+      const guard = setTimeout(finish, 15000);
+      v.addEventListener('canplay', finish, { once: true });
+      s.opening = false; s.hadPlayer = true; hookVideo(); drawChip();
+    } else { S.opening = false; applyState(m); }
+    panelClose();
+  }
+  function onMsg(sess, m) {
+    if (S !== sess || !m || m.id === sess.id) return;
+    if (sess.peer && m.id !== sess.peer.id) return;          // جلسة بين شخصين فقط
+    switch (m.t) {
+      case 'hello':
+        sess.peer = { id: m.id, name: String(m.name || 'PC').slice(0, 40) };
+        if (!m.re) tx({ t: 'hello', name: myName, re: 1 });
+        if (sess.role === 'host') { sendOpen(); toast(sess.peer.name + ' دخل للجلسة'); }
+        panel(); drawChip(); break;
+      case 'open': if (sess.role === 'guest') { m._rx = Date.now(); openRemote(m); } break;
+      case 'play': remote0('play', m); break;
+      case 'pause': remote0('pause', m); break;
+      case 'seek': applyState({ t: 'seek', at: m.at, paused: m.paused }); break;
+      case 'tick': if (sess.role === 'guest') applyState(m); break;
+      case 'bye': toast((sess.peer ? sess.peer.name : 'صديقك') + ' خرج من الجلسة'); leave('quiet'); break;
     }
   }
+  function remote0(kind, m) {
+    const v = vid(); if (!v) return;
+    if (isFinite(m.at) && Math.abs(v.currentTime - m.at) > 0.6) remote('seeked', () => { v.currentTime = m.at; });
+    if (kind === 'play' && v.paused) remote('play', () => v.play().catch(() => {}));
+    if (kind === 'pause' && !v.paused) remote('pause', () => v.pause());
+  }
+
+  // ---------- الواجهة ----------
+  function panelClose() { const p = document.getElementById('wp'); p && p.remove(); }
+  function panel() {
+    panelClose();
+    const p = document.createElement('div'); p.id = 'wp';
+    const inPlayer = !!vid();
+    let body = '';
+    if (!S) {
+      body = `<h3>${ICON} مشاهدة مشتركة</h3>
+        ${inPlayer ? '<button class="wpb1" id="wpNew">إنشاء جلسة جديدة</button><div class="wpor">أو</div>' : '<p class="wpm">أدخل الكود الذي أرسله لك صديقك:</p>'}
+        <div class="wprow"><input id="wpCode" maxlength="9" placeholder="الكود" autocomplete="off" spellcheck="false"><button class="wpb1" id="wpGo">OK</button></div>`;
+    } else {
+      body = `<h3>${ICON} الجلسة</h3>
+        ${S.peer || S.role === 'guest' ? '' : `<p class="wpm">أرسل هذا الكود إلى صديقك:</p><div class="wpcode" id="wpShow">${E(S.code)}</div><button class="wpb1" id="wpCopy">نسخ الكود</button><p class="wpm">بانتظار دخول صديقك…</p>`}
+        ${S.role === 'guest' && !S.peer ? '<p class="wpm">بانتظار الاتصال…</p>' : ''}
+        <div class="wppeers">${peersHtml()}</div>
+        <button class="wpb2" id="wpLeave">مغادرة الجلسة</button>`;
+    }
+    p.innerHTML = `<div class="wpbox" dir="rtl">${body}<button class="wpx" id="wpClose" title="إغلاق">✕</button></div>`;
+    (document.fullscreenElement || document.body).appendChild(p);
+    p.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Escape') panelClose(); else if (e.key === 'Enter' && p.querySelector('#wpCode')) p.querySelector('#wpGo').click(); };
+    p.onclick = (e) => { if (e.target === p) panelClose(); };
+    const q = (i) => p.querySelector(i);
+    q('#wpClose').onclick = panelClose;
+    if (q('#wpNew')) q('#wpNew').onclick = host;
+    if (q('#wpGo')) q('#wpGo').onclick = () => join(q('#wpCode').value);
+    if (q('#wpCode')) q('#wpCode').focus();
+    if (q('#wpCopy')) q('#wpCopy').onclick = () => { navigator.clipboard.writeText(S.code).then(() => toast('تم نسخ الكود'), () => toast('تعذّر النسخ')); };
+    if (q('#wpLeave')) q('#wpLeave').onclick = () => leave(true);
+  }
+  const peersHtml = () => !S ? '' :
+    `<div class="wpme">● ${E(myName)} <small>(أنت)</small></div>` + (S.peer ? `<div class="wpfr">● ${E(S.peer.name)}</div>` : '');
+  function drawChip() {
+    document.querySelectorAll('.wpchip').forEach((n) => n.remove());
+    const box = document.querySelector('#pl .pbox'); if (!S || !box) return;
+    const c = document.createElement('div'); c.className = 'wpchip'; c.innerHTML = peersHtml();
+    box.appendChild(c);
+  }
+
+  // ---------- ربط المشغّل ----------
+  const _attach = attach;
+  attach = function (url, s) {                                 // eslint-disable-line no-global-assign
+    _attach(url, s);
+    const pl = document.querySelector('#pl'); if (!pl) return;
+    pl._wpUrl = url;
+    const top = pl.querySelector('.ptop');
+    if (top && !top.querySelector('#pwp')) {
+      const b = document.createElement('button'); b.id = 'pwp'; b.title = 'مشاهدة مشتركة'; b.innerHTML = ICON;
+      b.onclick = (e) => { e.stopPropagation(); panel(); };
+      top.insertBefore(b, top.querySelector('.sp'));
+    }
+    if (S) {
+      S.hadPlayer = true;
+      if (!S.opening) { S.url = url; if (S.role === 'host') setTimeout(() => { hookVideo(); sendOpen(); }, 300); else hookVideo(); }
+      drawChip();
+    }
+  };
+  const _close = closePlayer;
+  closePlayer = function () {                                  // eslint-disable-line no-global-assign
+    _close.apply(this, arguments);
+    if (S && S.hadPlayer) setTimeout(() => { if (S && !document.querySelector('#pl')) leave(true); }, 0);   // خرجت من المشغّل = خرجت من الجلسة
+  };
+
+  // أيقونة الهيدر (للي غادي يدخل بكود) + التنسيق
+  const hb = document.getElementById('nParty');
+  if (hb) { hb.innerHTML = ICON; hb.onclick = () => panel(); }
+  const css = document.createElement('style');
+  css.textContent = `
+#nParty{flex:none;display:flex;align-items:center;justify-content:center;width:42px;height:42px;padding:0;background:#ffffff14;border:1px solid #ffffff22;border-radius:50%;color:#ff3b4a;-webkit-app-region:no-drag}
+#nParty svg.i{width:20px;height:20px}#nParty:hover{background:#ffffff26}
+#wp{position:fixed;inset:0;z-index:80;background:#000a;display:flex;align-items:center;justify-content:center;direction:rtl}
+.wpbox{position:relative;width:min(380px,90vw);background:#14121c;border:1px solid #ffffff22;border-radius:16px;padding:22px 22px 18px;color:#fff;box-shadow:0 24px 70px #000c;display:flex;flex-direction:column;gap:12px}
+.wpbox h3{margin:0;display:flex;align-items:center;gap:8px;font-size:17px}.wpbox h3 svg.i{width:22px;height:22px;color:var(--a1)}
+.wpm{margin:0;font-size:13px;opacity:.75}.wpor{text-align:center;opacity:.5;font-size:12px}
+.wprow{display:flex;gap:8px}
+.wprow input{flex:1;min-width:0;background:#ffffff12;border:1px solid #ffffff2a;border-radius:10px;padding:10px 12px;color:#fff;font-size:18px;letter-spacing:4px;text-align:center;text-transform:uppercase;direction:ltr}
+.wpb1,.wpb2{border:0;border-radius:10px;padding:10px 18px;font-weight:700;color:#fff;background:var(--a1);cursor:pointer}
+.wpb2{background:#ffffff1f}.wpb1:hover,.wpb2:hover{filter:brightness(1.15)}
+.wpcode{font-size:34px;font-weight:800;letter-spacing:8px;text-align:center;direction:ltr;background:#ffffff10;border-radius:12px;padding:12px;user-select:all}
+.wpx{position:absolute;top:10px;inset-inline-start:12px;background:none;border:0;color:#fff9;font-size:16px;cursor:pointer}
+.wppeers{display:flex;flex-direction:column;gap:6px;font-weight:700}
+.wpme{color:#ff3b4a}.wpfr{color:#fff}.wppeers small{font-weight:400;opacity:.6}
+#pl .wpchip,.wpchip{position:absolute;top:58px;inset-inline-start:20px;display:flex;flex-direction:column;gap:2px;background:#0008;border-radius:10px;padding:6px 12px;font-size:13px;font-weight:700;direction:ltr;z-index:3;transition:opacity .3s;pointer-events:none}
+#pl.idle .wpchip{opacity:0}
+.wpload{position:absolute;inset:0;z-index:5;background:#07060c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;transition:opacity .4s;direction:rtl}
+.wpload.out{opacity:0;pointer-events:none}.wpload p{margin:0;font-weight:700;font-size:18px}.wpload small{opacity:.65}
+.wpspin{width:42px;height:42px;border-radius:50%;border:4px solid #ffffff2a;border-top-color:#ff3b4a;animation:wpr .8s linear infinite}@keyframes wpr{to{transform:rotate(360deg)}}
+.wpchip .wpme{color:#ff3b4a}.wpchip .wpfr{color:#fff}.wpchip small{display:none}`;
+  document.head.appendChild(css);
 })();
