@@ -1,9 +1,0 @@
-{
-  "appId": "com.wayanime.app",
-  "appName": "WayAnime",
-  "webDir": "www",
-  "backgroundColor": "#07060c",
-  "server": { "androidScheme": "https", "cleartext": true },
-  "android": { "allowMixedContent": true },
-  "plugins": { "CapacitorHttp": { "enabled": true } }
-}
